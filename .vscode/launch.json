@@ -11,9 +11,9 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "-s", "10.10.220.60",
+                "-s", "10.10.220.59",
                 "-U", "IEMAdmin",
-                "-P", "BigFix@123",
+                "-P", "BigFix!123",
                 "-o", "2" 
             ]
         },
