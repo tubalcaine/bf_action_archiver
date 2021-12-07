@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import json
 import bigfixREST
 
@@ -24,7 +25,7 @@ bf = bigfixREST.bigfixRESTConnection(conf.bfserver, conf.bfport, conf.bfuser, co
 
 actquery = f'''(id of it, state of it, name of it, time issued of it, name of issuer of it) 
 of bes actions 
-whose (((now - time issued of it) > 2*day) and 
+whose (((now - time issued of it) > {conf.older}*day) and 
 (state of it = "Expired" or state of it = "Stopped"))'''.strip()
 
 ares = bf.srQueryJson(actquery)
@@ -61,4 +62,4 @@ for actid in ares["result"]:
             delres = bf._delete("/api/action/" + str(actid[0]))
 
 
-exit(0)
+sys.exit(0)
