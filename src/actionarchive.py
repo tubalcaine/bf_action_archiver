@@ -23,7 +23,7 @@ os.makedirs(conf.folder, exist_ok=True)
 
 bf = bigfixREST.bigfixRESTConnection(conf.bfserver, conf.bfport, conf.bfuser, conf.bfpass)
 
-actquery = f'''(id of it, state of it, name of it, time issued of it, name of issuer of it) 
+actquery = f'''(id of it, state of it, name of it, time issued of it, name of issuer of it | "_DeletedOperator") 
 of bes actions 
 whose (((now - time issued of it) > {conf.older}*day) and 
 (state of it = "Expired" or state of it = "Stopped"))'''.strip()
