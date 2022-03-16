@@ -37,10 +37,10 @@ if ares is None:
 if conf.verbose:
     print(f"Action query returned {len(ares['result'])} results.")
 
-with open(conf.folder + "/action_data.json", "w") as f:
+with open(conf.folder + "/action_data.json", "w", encoding="utf-8") as f:
     f.write(json.dumps(ares, sort_keys=True, indent=4))
 
-with open(conf.folder + "/execution_config_data.json", "w") as f:
+with open(conf.folder + "/execution_config_data.json", "w", encoding="utf-8") as f:
     v = vars(conf)
     v["bfpass"] = "Removed_for_Security"
     f.write(json.dumps(v, sort_keys=True, indent=4))
@@ -56,13 +56,13 @@ for actid in ares["result"]:
     actpath = f"{conf.folder}/{actid[4]}"
     os.makedirs(actpath, exist_ok=True)
 
-    with open(f"{actpath}/{str(actid[0])}_action.xml", "w") as a:
+    with open(f"{actpath}/{str(actid[0])}_action.xml", "w", encoding="utf-8") as a:
         a.write(action)
     
-    with open(f"{actpath}/{str(actid[0])}_result.xml", "w") as a:
+    with open(f"{actpath}/{str(actid[0])}_result.xml", "w", encoding="utf-8") as a:
         a.write(status)
         
-    with open(f"{actpath}/{str(actid[0])}_META.txt", "w") as a:
+    with open(f"{actpath}/{str(actid[0])}_META.txt", "w", encoding="utf-8") as a:
         a.write(json.dumps(actid, sort_keys=True, indent=4))
     
     if conf.verbose:
