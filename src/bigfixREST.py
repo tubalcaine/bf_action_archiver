@@ -32,7 +32,6 @@ class bigfixActionResult():
         return self.xml
 
 
-
 ## bigfixRESTConnection class
 class bigfixRESTConnection():
 
@@ -46,6 +45,14 @@ class bigfixRESTConnection():
 
         self.sess.auth = (self.bfuser, self.bfpass)
         resp = self.sess.get(self.url + "/api/login", verify=False)
+
+    def _is_success(self, http_return_value):
+        rv_diff = http_return_value - 200
+        if (rv_diff >= 0 and rv_diff < 100):
+            return True
+
+        return False
+    
 
     def srQueryJson(self, srquery):
         qheader = {
@@ -78,7 +85,7 @@ class bigfixRESTConnection():
         req = requests.Request('GET', self.url + url)
         res = self.sess.send(self.sess.prepare_request(req))
 
-        if (res.status_code != 200):
+        if (not self.is_success(res.status_code)):
             return None
         
         return res.text
@@ -88,10 +95,10 @@ class bigfixRESTConnection():
         req = requests.Request('DELETE', self.url + url)
         res = self.sess.send(self.sess.prepare_request(req))
 
-        if (res.status_code != 200):
-            return None
+        if (self._is_success(res.status_code)):
+            return res.content
         
-        return res.content
+        return None
 
 
     # The idea of this stub method is that we can parse up the return tuple, mangling the
@@ -147,7 +154,7 @@ class bigfixRESTConnection():
             
         result = self.sess.send(prepped, verify = False)
 
-        if (result.status_code == 200):
+        if (self._is_success(result.status_code)):
             print(result)
             return bigfixActionResult(result.content)
         else:

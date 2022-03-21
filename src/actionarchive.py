@@ -5,7 +5,7 @@ import json
 import bigfixREST
 
 
-## MAIN code begins
+## MAIN code begins:
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-s", "--bfserver", type=str, help="BigFix REST Server name/IP address")
