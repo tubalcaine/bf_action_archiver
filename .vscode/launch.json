@@ -28,7 +28,7 @@
                 "-s", "10.10.220.60",
                 "-U", "InvalidUser",
                 "-P", "BigFix!123",
-                "-f", "C:\\Users\\mschwarz\\Desktop\\ActionArchive",
+                "-f", "Y:\\BF2Lab_ActionArchive",
                 "-o", "2",
                 "-v"
             ]
@@ -44,6 +44,7 @@
                 "-U", "IEMAdmin",
                 "-P", "BigFix!123",
                 "-o", "2",
+                "-f", "Y:\\BF2Lab_ActionArchiveDel",
                 "-d",
                 "-v"
             ]
