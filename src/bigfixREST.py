@@ -1,10 +1,10 @@
-'''
+"""
 bigfixREST.py -- an abortive attempt to make a generic class libary to
 access the BigFix core REST API. Consider using jgstew's besapi module
 (which is actually in pip) instead:
 
 https://github.com/jgstew/besapi
-'''
+"""
 
 import json
 import xml.etree.ElementTree as ET
@@ -19,31 +19,33 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ## bigFixActionResult class
 class BigfixActionResult:
-    '''A class that represents an API Action Result'''
+    """A class that represents an API Action Result"""
+
     def __init__(self, resxml):
         self.xml = resxml
         self.root = ET.fromstring(resxml)
 
     def get_action_id(self):
-        '''get the action id'''
+        """get the action id"""
         thing = self.root.findall("Action/ID")
         act_id = thing[0].text
         return act_id
 
     def get_action_url(self):
-        '''get the action URL'''
+        """get the action URL"""
         thing = self.root.findall("Action")
         attrs = thing[0].attrib
         return attrs["Resource"]
 
     def get_action_result_xml(self):
-        '''return the action result XML'''
+        """return the action result XML"""
         return self.xml
 
 
 ## bigfixRESTConnection class
 class BigfixRESTConnection:
-    '''A class that represents one connection to a BigFix REST API'''
+    """A class that represents one connection to a BigFix REST API"""
+
     def __init__(self, bfserver, bfport, bfuser, bfpass):
         self.bfserver = bfserver
         self.bfport = bfport
@@ -66,8 +68,8 @@ class BigfixRESTConnection:
         return False
 
     def relevance_query_json(self, srquery):
-        '''Takes a session relevance query and returns a JSON string
-        on success and None on error'''
+        """Takes a session relevance query and returns a JSON string
+        on success and None on error"""
         qheader = {"Content-Type": "application/x-www-form-urlencoded"}
 
         qquery = {"relevance": srquery, "output": "json"}
@@ -88,8 +90,8 @@ class BigfixRESTConnection:
 
     ## Rawest possible GET
     def api_get(self, url):
-        '''Does an http GET on a URL and returns the decoded result
-        or None on error'''
+        """Does an http GET on a URL and returns the decoded result
+        or None on error"""
         req = requests.Request("GET", self.url + url)
         res = self.sess.send(self.sess.prepare_request(req))
 
@@ -100,8 +102,8 @@ class BigfixRESTConnection:
 
     ## Rawest possible DELETE
     def api_delete(self, url):
-        '''Calls an http DELETE on a URL and returns the decoded content
-        or None on error'''
+        """Calls an http DELETE on a URL and returns the decoded content
+        or None on error"""
         req = requests.Request("DELETE", self.url + url)
         res = self.sess.send(self.sess.prepare_request(req))
 
@@ -126,8 +128,8 @@ class BigfixRESTConnection:
         action_id="Action1",
         title="Programmatic Action from Python Script",
     ):
-        '''Takes a SourcedFixletAction on the given target list using the given
-        site id, fixlet id, and action'''
+        """Takes a SourcedFixletAction on the given target list using the given
+        site id, fixlet id, and action"""
         templ = """\
 <?xml version="1.0" encoding="UTF-8" ?>
 <BES xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" >
