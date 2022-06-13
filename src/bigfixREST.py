@@ -175,3 +175,4 @@ class BigfixRESTConnection:
             return BigfixActionResult(result.content)
         else:
             return None
+            
