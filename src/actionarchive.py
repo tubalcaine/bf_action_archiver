@@ -11,6 +11,7 @@ import bigfixREST
 
 
 ## MAIN code begins:
+print("BigFix Action Archiver v1.0")
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
