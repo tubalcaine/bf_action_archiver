@@ -5,16 +5,32 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Archive, no delete",
+            "name": "Archive, !delete",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "-s", "10.10.220.59",
+                "-s", "10.10.220.60",
                 "-U", "IEMAdmin",
                 "-P", "BigFix!123",
-                "-o", "2" 
+                "-f", "Y:\\BF2LAB_ActionArchive",
+                "-o", "2",
+                "-v"
+            ]
+        },        {
+            "name": "Archive, connection failure",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "-s", "10.10.220.60",
+                "-U", "InvalidUser",
+                "-P", "BigFix!123",
+                "-f", "Y:\\BF2Lab_ActionArchive",
+                "-o", "2",
+                "-v"
             ]
         },
         {
@@ -26,9 +42,11 @@
             "args": [
                 "-s", "10.10.220.60",
                 "-U", "IEMAdmin",
-                "-P", "BigFix@123",
+                "-P", "BigFix!123",
                 "-o", "2",
-                "-d"
+                "-f", "Y:\\BF2Lab_ActionArchiveDel",
+                "-d",
+                "-v"
             ]
         }    ]
 }
