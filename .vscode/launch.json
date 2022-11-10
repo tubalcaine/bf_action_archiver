@@ -14,7 +14,7 @@
                 "-s", "10.10.220.60",
                 "-U", "IEMAdmin",
                 "-P", "BigFix!123",
-                "-f", "Y:\\BF2LAB_ActionArchive",
+                "-f", "Z:/BF2LAB_ActionArchive",
                 "-o", "2",
                 "-v"
             ]
@@ -28,7 +28,7 @@
                 "-s", "10.10.220.60",
                 "-U", "InvalidUser",
                 "-P", "BigFix!123",
-                "-f", "Y:\\BF2Lab_ActionArchive",
+                "-f", "Z:/BF2Lab_ActionArchive",
                 "-o", "2",
                 "-v"
             ]
@@ -44,7 +44,7 @@
                 "-U", "IEMAdmin",
                 "-P", "BigFix!123",
                 "-o", "2",
-                "-f", "Y:\\BF2Lab_ActionArchiveDel",
+                "-f", "Z:/BF2Lab_ActionArchiveDel",
                 "-d",
                 "-v"
             ]
