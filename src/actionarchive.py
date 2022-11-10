@@ -3,10 +3,12 @@ actionarchiver.py - A script that backs up all actions issued more  than --days
 ago that are stopped or expired int a directory structure by issuing operator.
 It can optionally delete the actions also. This can provide useful audit
 information while also cleaning up actions that bog down the console."""
+from getpass import getpass
 import argparse
 import os
 import sys
 import json
+import keyring
 import bigfixREST
 
 
@@ -17,7 +19,8 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-s", "--bfserver", type=str, help="BigFix REST Server name/IP address"
+        "-b", "--bfserver", type=str, help="BigFix REST Server name/IP address",
+        required=True
     )
     parser.add_argument(
         "-p",
@@ -27,14 +30,16 @@ def main():
         default=52311,
     )
     parser.add_argument(
-        "-U", "--bfuser", type=str, help="BigFix Console/REST User name"
+        "-u", "--bfuser", type=str, help="BigFix Console/REST User name",
+        required=True
     )
     parser.add_argument("-P", "--bfpass", type=str, help="BigFix Console/REST Password")
     parser.add_argument(
-        "-o", "--older", type=int, help="Archive non-open actions older than N days"
+        "-o", "--older", type=int, help="Archive non-open actions older than N days (default 30)",
+        default=30
     )
     parser.add_argument(
-        "-f", "--folder", type=str, help="Folder to write to", default="./aarchive"
+        "-f", "--folder", type=str, help="Folder to write to. Default ./aarchive", default="./aarchive"
     )
     parser.add_argument(
         "-d", "--delete", action="store_true", help="Delete archived actions"
@@ -42,13 +47,33 @@ def main():
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Verbose output (show details)"
     )
+    parser.add_argument(
+        "-k", "--keycreds",
+        type=str,
+        help="Use stored creds from key. Ex: -k mykey"
+    )
+    parser.add_argument(
+        "-s", "--setcreds",
+        help="Set credentials store by key name: Ex -s mykey",
+        type=str
+    )
     conf = parser.parse_args()
+
+    # setcreds is a "single" operation, do it and terminate.
+    if conf.setcreds is not None:
+        set_secure_credentials(conf.setcreds, conf.bfuser)
+        sys.exit(0)
+
+    if conf.keycreds is not None:
+        bfpass = keyring.get_password(conf.keycreds, conf.bfuser)
+    else:
+        bfpass = conf.bfpass
 
     # Create the dest folder if it does not exist
     os.makedirs(conf.folder, exist_ok=True)
 
     big_fix = bigfixREST.BigfixRESTConnection(
-        conf.bfserver, conf.bfport, conf.bfuser, conf.bfpass
+        conf.bfserver, conf.bfport, conf.bfuser, bfpass
     )
 
     actquery = f"""(id of it, state of it, name of it, time issued of it,
@@ -118,6 +143,33 @@ def main():
                     print(
                         f"[DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
                     )
+    sys.exit(0)
+
+
+def set_secure_credentials(service_name, user_name):
+    """set_secure_credentials() Use python keyring to store REST API password
+    in a secure manner for later use"""
+    ## We need to prompt for and save encrypted credentials
+    onepass = "not"  # Set to ensure mismatch and avoid fail msg 1st time
+    twopass = ""
+
+    print(f"Enter the password for the user {user_name}")
+    print("The password will not display. You must enter the same")
+    print("password twice in a row. It will be stored encrypted")
+    print(f"under the key name {service_name} in your system's")
+    print("secure credential store. Use the command switches: ")
+    print(f"-k {service_name} -U {user_name}    --OR--")
+    print(f"--keycreds {service_name} --bfuser {user_name}")
+    print("to run the program without having to provide the password")
+
+    while onepass != twopass:
+        if onepass != "not":
+            print("\nPasswords did not match. Try again.\n")
+
+        onepass = getpass(f"BigFix password for {user_name}: ")
+        twopass = getpass("Enter the password again: ")
+
+    keyring.set_password(service_name, user_name, onepass)
     sys.exit(0)
 
 
