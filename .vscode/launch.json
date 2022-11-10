@@ -11,8 +11,8 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "-s", "10.10.220.60",
-                "-U", "IEMAdmin",
+                "-b", "10.10.220.60",
+                "-u", "IEMAdmin",
                 "-P", "BigFix!123",
                 "-f", "Z:/BF2LAB_ActionArchive",
                 "-o", "2",
@@ -25,8 +25,8 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "-s", "10.10.220.60",
-                "-U", "InvalidUser",
+                "-b", "10.10.220.60",
+                "-u", "InvalidUser",
                 "-P", "BigFix!123",
                 "-f", "Z:/BF2Lab_ActionArchive",
                 "-o", "2",
@@ -40,8 +40,8 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "args": [
-                "-s", "10.10.220.60",
-                "-U", "IEMAdmin",
+                "-b", "10.10.220.60",
+                "-u", "IEMAdmin",
                 "-P", "BigFix!123",
                 "-o", "2",
                 "-f", "Z:/BF2Lab_ActionArchiveDel",
