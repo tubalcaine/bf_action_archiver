@@ -39,7 +39,8 @@ def main():
         default=30
     )
     parser.add_argument(
-        "-f", "--folder", type=str, help="Folder to write to. Default ./aarchive", default="./aarchive"
+        "-f", "--folder", type=str,
+        help="Folder to write to. Default ./aarchive", default="./aarchive"
     )
     parser.add_argument(
         "-d", "--delete", action="store_true", help="Delete archived actions"
