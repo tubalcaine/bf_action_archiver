@@ -9,6 +9,7 @@ import os
 import sys
 import json
 import keyring
+import keyring.backends
 import bigfixREST
 
 
@@ -55,15 +56,15 @@ def main():
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Verbose output (show details)"
     )
-    parser.add_argument(
-        "-k", "--keycreds", type=str, help="Use stored creds from key. Ex: -k mykey"
-    )
-    parser.add_argument(
-        "-s",
-        "--setcreds",
-        help="Set credentials store by key name: Ex -s mykey",
-        type=str,
-    )
+    # parser.add_argument(
+    #     "-k", "--keycreds", type=str, help="Use stored creds from key. Ex: -k mykey"
+    # )
+    # parser.add_argument(
+    #     "-s",
+    #     "--setcreds",
+    #     help="Set credentials store by key name: Ex -s mykey",
+    #     type=str,
+    # )
     conf = parser.parse_args()
 
     # setcreds is a "single" operation, do it and terminate.
