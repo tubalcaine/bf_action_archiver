@@ -8,8 +8,8 @@ import argparse
 import os
 import sys
 import json
-import keyring
-import keyring.backends
+#import keyring
+#import keyring.backends
 import bigfixREST
 
 
@@ -68,14 +68,15 @@ def main():
     conf = parser.parse_args()
 
     # setcreds is a "single" operation, do it and terminate.
-    if conf.setcreds is not None:
-        set_secure_credentials(conf.setcreds, conf.bfuser)
-        sys.exit(0)
+    # if conf.setcreds is not None:
+    #     set_secure_credentials(conf.setcreds, conf.bfuser)
+    #     sys.exit(0)
 
-    if conf.keycreds is not None:
-        bfpass = keyring.get_password(conf.keycreds, conf.bfuser)
-    else:
-        bfpass = conf.bfpass
+    # if conf.keycreds is not None:
+    #     bfpass = keyring.get_password(conf.keycreds, conf.bfuser)
+    # else:
+    #     bfpass = conf.bfpass
+    bfpass = conf.bfpass
 
     # Create the dest folder if it does not exist
     os.makedirs(conf.folder, exist_ok=True)
