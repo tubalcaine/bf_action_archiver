@@ -18,7 +18,8 @@
                 "-o", "2",
                 "-v"
             ]
-        },        {
+        },        
+        {
             "name": "Archive, connection failure",
             "type": "python",
             "request": "launch",
@@ -48,5 +49,17 @@
                 "-d",
                 "-v"
             ]
-        }    ]
+        },
+        {
+            "name": "Archive, setcreds",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "-u", "IEMAdmin",
+                "-s", "mykey"
+            ]
+        }
+    ]
 }
