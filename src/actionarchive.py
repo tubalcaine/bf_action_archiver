@@ -23,7 +23,6 @@ def main():
         "--bfserver",
         type=str,
         help="BigFix REST Server name/IP address",
-        required=True,
     )
     parser.add_argument(
         "-p",
