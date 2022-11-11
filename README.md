@@ -1,5 +1,17 @@
 # bf_action_archiver
-A tool to export compressed text archives of BigFix actions and results for audit purposes, with delete option
+A tool to export compressed text archives of BigFix actions and results for audit purposes, with optional delete.
+
+This tool queries for all stopped and/or expired actions whose action issued time is more than
+a certain number of days old (30 days by default) and writes the whole history of those actions to
+a directory structure where:  
+- The top level directory contains
+    - A file named __execution_config_data.json__ which contains the command line argument values used in the run, with passwords removed
+    - A file named __action_data.json__ which contains the results of the session relevance query used to select the actions to archive
+    - One folder per user who issued an action being archived. Each folder contains:
+        - Three files per action:
+            - {action_id}_META.txt
+
+
 
 ## BigFix Action Archiver v1.0
 ### Command line arguments
