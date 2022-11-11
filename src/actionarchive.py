@@ -19,8 +19,11 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-b", "--bfserver", type=str, help="BigFix REST Server name/IP address",
-        required=True
+        "-b",
+        "--bfserver",
+        type=str,
+        help="BigFix REST Server name/IP address",
+        required=True,
     )
     parser.add_argument(
         "-p",
@@ -30,17 +33,22 @@ def main():
         default=52311,
     )
     parser.add_argument(
-        "-u", "--bfuser", type=str, help="BigFix Console/REST User name",
-        required=True
+        "-u", "--bfuser", type=str, help="BigFix Console/REST User name", required=True
     )
     parser.add_argument("-P", "--bfpass", type=str, help="BigFix Console/REST Password")
     parser.add_argument(
-        "-o", "--older", type=int, help="Archive non-open actions older than N days (default 30)",
-        default=30
+        "-o",
+        "--older",
+        type=int,
+        help="Archive non-open actions older than N days (default 30)",
+        default=30,
     )
     parser.add_argument(
-        "-f", "--folder", type=str,
-        help="Folder to write to. Default ./aarchive", default="./aarchive"
+        "-f",
+        "--folder",
+        type=str,
+        help="Folder to write to. Default ./aarchive",
+        default="./aarchive",
     )
     parser.add_argument(
         "-d", "--delete", action="store_true", help="Delete archived actions"
@@ -49,14 +57,13 @@ def main():
         "-v", "--verbose", action="store_true", help="Verbose output (show details)"
     )
     parser.add_argument(
-        "-k", "--keycreds",
-        type=str,
-        help="Use stored creds from key. Ex: -k mykey"
+        "-k", "--keycreds", type=str, help="Use stored creds from key. Ex: -k mykey"
     )
     parser.add_argument(
-        "-s", "--setcreds",
+        "-s",
+        "--setcreds",
         help="Set credentials store by key name: Ex -s mykey",
-        type=str
+        type=str,
     )
     conf = parser.parse_args()
 
