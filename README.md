@@ -4,7 +4,7 @@ A tool to export compressed text archives of BigFix actions and results for audi
 ## BigFix Action Archiver v1.0
 ### Command line arguments
 
-usage: actionarchive [-h] [-b BFSERVER] [-p BFPORT] -u BFUSER [-P BFPASS]
+`usage: actionarchive [-h] [-b BFSERVER] [-p BFPORT] -u BFUSER [-P BFPASS]
                      [-o OLDER] [-f FOLDER] [-d] [-v]
 
 optional arguments:
@@ -24,3 +24,4 @@ optional arguments:
                         Folder to write to. Default ./aarchive
   -d, --delete          Delete archived actions
   -v, --verbose         Verbose output (show details)
+`
