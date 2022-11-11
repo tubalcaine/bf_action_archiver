@@ -178,7 +178,7 @@ def set_secure_credentials(service_name, user_name):
         onepass = getpass(f"BigFix password for {user_name}: ")
         twopass = getpass("Enter the password again: ")
 
-    keyring.set_password(service_name, user_name, onepass)
+#    keyring.set_password(service_name, user_name, onepass)
     sys.exit(0)
 
 
