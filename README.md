@@ -9,7 +9,13 @@ a directory structure where:
     - A file named __action_data.json__ which contains the results of the session relevance query used to select the actions to archive
     - One folder per user who issued an action being archived. Each folder contains:
         - Three files per action:
-            - {action_id}_META.txt
+            - {action_id}_META.txt which contains the same data as the top-level action data file, but just for this action.
+            - {action_id}_action.xml which contains the XML for the action itself (relevance, actionscript, action settings, etc.)
+            - {action_id}_result.xml which contains the results of the action on each endpoint that ran the action and returned some result.
+
+This is a complete "audit history" of the actions.
+
+If you specify the -d/--delete option, each action will be deleted from the server after its archive data is written to disk.
 
 
 
