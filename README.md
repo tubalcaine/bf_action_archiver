@@ -1,5 +1,5 @@
 # bf_action_archiver
-A tool to export compressed text archives of BigFix actions and results for audit purposes, with optional delete.
+A tool to export text archives of BigFix actions and results for audit purposes, with optional delete.
 
 This tool queries for all stopped and/or expired actions whose action issued time is more than
 a certain number of days old (30 days by default) and writes the whole history of those actions to
