@@ -155,6 +155,48 @@ def main():
         ) as act_file:
             act_file.write(json.dumps(actid, sort_keys=True, indent=4))
 
+        ## If we are a multiple action group, we need to make a MAG 
+        ## directory and populate it with component actions
+        if actid[5]:
+            mag_query = f"""
+            (id of it, state of it, name of it) of member actions of bes action whose if of it = {actid[0]}
+            """
+            mag_components = big_fix.relevance_query_json(mag_query)
+            if mag_components is None:
+                print(f"Could not get member actions of MAG id {actid[0]}")
+                sys.exit(1)
+
+            mag_path = f"{actpath}/{actid[0]}_MAG"
+            os.makedirs(mag_path, exist_ok=True)
+
+            for mag_id in mag_components["result"]:
+                magurl = f"/api/action/{str(mag_id[0])}"
+                if conf.verbose:
+                    print(f"Processing MAG action url [{magurl}]")
+
+                mag_action = str(big_fix.api_get(magurl))
+
+                if mag_action is None:
+                    print("REST API Call failed.")
+                    sys.exit(1)
+
+                mag_action_status = str(big_fix.api_get(magurl + "/status"))
+
+                if mag_action_status is None:
+                    print("REST API Call failed.")
+                    sys.exit(1)
+
+                with open(
+                    f"{mag_path}/{str(mag_id[0])}_action.xml", "w", encoding="utf-8"
+                ) as act_file:
+                    act_file.write(action)
+
+                with open(
+                    f"{mag_path}/{str(mag_id[0])}_result.xml", "w", encoding="utf-8"
+                ) as act_file:
+                    act_file.write(action_status)
+
+        # Back the main flow...
         if conf.verbose:
             print(f"Action {acturl} written to {actpath}")
 
