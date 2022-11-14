@@ -15,7 +15,7 @@
                 "-u", "IEMAdmin",
                 "-P", "BigFix!123",
                 "-f", "Z:/BF2LAB_ActionArchive",
-                "-o", "2",
+                "-o", "0",
                 "-v"
             ]
         },        
