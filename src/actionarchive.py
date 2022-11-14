@@ -159,7 +159,7 @@ def main():
         ## directory and populate it with component actions
         if actid[5]:
             mag_query = f"""
-            (id of it, state of it, name of it) of member actions of bes action whose if of it = {actid[0]}
+            (id of it, state of it, name of it) of member actions of bes action whose (id of it = {actid[0]})
             """
             mag_components = big_fix.relevance_query_json(mag_query)
             if mag_components is None:
