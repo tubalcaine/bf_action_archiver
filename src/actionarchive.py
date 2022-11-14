@@ -56,6 +56,12 @@ def main():
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Verbose output (show details)"
     )
+    parser.add_argument(
+        "-w", "--whose",
+        type=str,
+        default="true",
+        help="Additional session relevance for whose clause, default: true"
+    )
     # parser.add_argument(
     #     "-k", "--keycreds", type=str, help="Use stored creds from key. Ex: -k mykey"
     # )
@@ -88,7 +94,7 @@ def main():
     actquery = f"""(id of it, state of it, name of it, time issued of it,
     name of issuer of it | "_DeletedOperator") 
     of bes actions 
-    whose (((now - time issued of it) > {conf.older}*day) and 
+    whose ({conf.whose} and ((now - time issued of it) > {conf.older}*day) and 
     (state of it = "Expired" or state of it = "Stopped"))""".strip()
 
     ares = big_fix.relevance_query_json(actquery)
@@ -118,8 +124,17 @@ def main():
         if conf.verbose:
             print(f"Processing action url [{acturl}]")
 
-        action = str(big_fix.api_get("/api/action/" + str(actid[0])))
-        action_status = str(big_fix.api_get("/api/action/" + str(actid[0]) + "/status"))
+        action = str(big_fix.api_get(acturl))
+
+        if action is None:
+            print("REST API Call failed.")
+            sys.exit(1)
+
+        action_status = str(big_fix.api_get(acturl + "/status"))
+
+        if action_status is None:
+            print("REST API Call failed.")
+            sys.exit(1)
 
         actpath = f"{conf.folder}/{actid[4]}"
         os.makedirs(actpath, exist_ok=True)

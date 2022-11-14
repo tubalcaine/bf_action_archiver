@@ -96,6 +96,7 @@ class BigfixRESTConnection:
         res = self.sess.send(self.sess.prepare_request(req))
 
         if not self._is_success(res.status_code):
+            print(f"Error: {res.status_code} Reason: {res.reason}")
             return None
 
         return res.text
