@@ -92,9 +92,10 @@ def main():
     )
 
     actquery = f"""(id of it, state of it, name of it, time issued of it,
-    name of issuer of it | "_DeletedOperator") 
+    name of issuer of it | "_DeletedOperator", multiple flag of it) 
     of bes actions 
     whose ({conf.whose} and ((now - time issued of it) > {conf.older}*day) and 
+    top level flag of it and
     (state of it = "Expired" or state of it = "Stopped"))""".strip()
 
     ares = big_fix.relevance_query_json(actquery)
