@@ -8,8 +8,9 @@ import argparse
 import os
 import sys
 import json
-#import keyring
-#import keyring.backends
+
+# import keyring
+# import keyring.backends
 import bigfixREST
 
 
@@ -57,10 +58,11 @@ def main():
         "-v", "--verbose", action="store_true", help="Verbose output (show details)"
     )
     parser.add_argument(
-        "-w", "--whose",
+        "-w",
+        "--whose",
         type=str,
         default="true",
-        help="Additional session relevance for whose clause, default: true"
+        help='Additional session relevance for "bes actions" whose clause, default: true',
     )
     # parser.add_argument(
     #     "-k", "--keycreds", type=str, help="Use stored creds from key. Ex: -k mykey"
@@ -155,7 +157,7 @@ def main():
         ) as act_file:
             act_file.write(json.dumps(actid, sort_keys=True, indent=4))
 
-        ## If we are a multiple action group, we need to make a MAG 
+        ## If we are a multiple action group, we need to make a MAG
         ## directory and populate it with component actions
         if actid[5]:
             mag_query = f"""
@@ -236,7 +238,7 @@ def set_secure_credentials(service_name, user_name):
         onepass = getpass(f"BigFix password for {user_name}: ")
         twopass = getpass("Enter the password again: ")
 
-#    keyring.set_password(service_name, user_name, onepass)
+    #    keyring.set_password(service_name, user_name, onepass)
     sys.exit(0)
 
 
