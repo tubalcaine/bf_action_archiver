@@ -12,6 +12,11 @@ a directory structure where:
             - {action_id}_META.txt which contains the same data as the top-level action data file, but just for this action.
             - {action_id}_action.xml which contains the XML for the action itself (relevance, actionscript, action settings, etc.)
             - {action_id}_result.xml which contains the results of the action on each endpoint that ran the action and returned some result.
+        - Multiple Action Groups (baseline actions) also have
+            - {action_id}_MAG directory that contains two files per subaction:
+                - {subaction_id}_action.xml which contains the XML for the action itself (relevance, actionscript, action settings, etc.)
+                - {subaction_id}_result.xml which contains the results of the action on each endpoint that ran the action and returned some result.
+            
 
 This is a complete "audit history" of the actions.
 
@@ -23,7 +28,7 @@ If you specify the -d/--delete option, each action will be deleted from the serv
 ### Command line arguments
 
     usage: actionarchive [-h] [-b BFSERVER] [-p BFPORT] -u BFUSER [-P BFPASS]
-                        [-o OLDER] [-f FOLDER] [-d] [-v]
+                        [-o OLDER] [-f FOLDER] [-d] [-v] [-w WHOSE]
 
     optional arguments:
     -h, --help            show this help message and exit
@@ -42,3 +47,6 @@ If you specify the -d/--delete option, each action will be deleted from the serv
                             Folder to write to. Default ./aarchive
     -d, --delete          Delete archived actions
     -v, --verbose         Verbose output (show details)
+    -w WHOSE, --whose WHOSE
+                            Additional session relevance for "bes actions" whose
+                            clause, default: true
