@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Archive, !delete",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
@@ -21,7 +21,7 @@
         },        
         {
             "name": "Archive, connection failure",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
@@ -36,7 +36,7 @@
         },
         {
             "name": "Archive, DELETE",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
@@ -52,7 +52,7 @@
         },
         {
             "name": "Archive, setcreds",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
