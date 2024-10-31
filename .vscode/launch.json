@@ -51,6 +51,38 @@
             ]
         },
         {
+            "name": "Linux Archive, DELETE",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "-b", "10.10.220.60",
+                "-u", "IEMAdmin",
+                "-P", "BigFix!123",
+                "-o", "30",
+                "-f", "~/BF2Lab_ActionArchiveDel",
+                "-d",
+                "-v"
+            ]
+        },
+        {
+            "name": "Linux StoredCred Archive, DELETE",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "-b", "10.10.220.60",
+                "-u", "IEMAdmin",
+                "-k", "lab2",
+                "-o", "3",
+                "-f", "~/BF2Lab_ActionArchiveDel",
+                "-d",
+                "-v"
+            ]
+        },
+        {
             "name": "Archive, setcreds",
             "type": "debugpy",
             "request": "launch",
@@ -58,7 +90,7 @@
             "console": "integratedTerminal",
             "args": [
                 "-u", "IEMAdmin",
-                "-s", "mykey"
+                "-s", "lab2"
             ]
         }
     ]

@@ -9,8 +9,8 @@ import os
 import sys
 import json
 
-# import keyring
-# import keyring.backends
+import keyring
+import keyring.backends
 import bigfixREST
 
 
@@ -64,27 +64,26 @@ def main():
         default="true",
         help='Additional session relevance for "bes actions" whose clause, default: true',
     )
-    # parser.add_argument(
-    #     "-k", "--keycreds", type=str, help="Use stored creds from key. Ex: -k mykey"
-    # )
-    # parser.add_argument(
-    #     "-s",
-    #     "--setcreds",
-    #     help="Set credentials store by key name: Ex -s mykey",
-    #     type=str,
-    # )
+    parser.add_argument(
+        "-k", "--keycreds", type=str, help="Use stored creds from key. Ex: -k mykey"
+    )
+    parser.add_argument(
+        "-s",
+        "--setcreds",
+        help="Set credentials store by key name: Ex -s mykey",
+        type=str,
+    )
     conf = parser.parse_args()
 
     # setcreds is a "single" operation, do it and terminate.
-    # if conf.setcreds is not None:
-    #     set_secure_credentials(conf.setcreds, conf.bfuser)
-    #     sys.exit(0)
+    if conf.setcreds is not None:
+        set_secure_credentials(conf.setcreds, conf.bfuser)
+        sys.exit(0)
 
-    # if conf.keycreds is not None:
-    #     bfpass = keyring.get_password(conf.keycreds, conf.bfuser)
-    # else:
-    #     bfpass = conf.bfpass
-    bfpass = conf.bfpass
+    if conf.keycreds is not None:
+        bfpass = keyring.get_password(conf.keycreds, conf.bfuser)
+    else:
+        bfpass = conf.bfpass
 
     # Create the dest folder if it does not exist
     os.makedirs(conf.folder, exist_ok=True)
@@ -238,7 +237,7 @@ def set_secure_credentials(service_name, user_name):
         onepass = getpass(f"BigFix password for {user_name}: ")
         twopass = getpass("Enter the password again: ")
 
-    #    keyring.set_password(service_name, user_name, onepass)
+        keyring.set_password(service_name, user_name, onepass)
     sys.exit(0)
 
 
