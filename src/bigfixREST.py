@@ -93,7 +93,7 @@ class BigfixRESTConnection:
         """Does an http GET on a URL and returns the decoded result
         or None on error"""
         req = requests.Request("GET", self.url + url)
-        res = self.sess.send(self.sess.prepare_request(req))
+        res = self.sess.send(self.sess.prepare_request(req), verify=False)
 
         if not self._is_success(res.status_code):
             print(f"Error: {res.status_code} Reason: {res.reason}")
