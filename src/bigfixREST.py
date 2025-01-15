@@ -106,7 +106,7 @@ class BigfixRESTConnection:
         """Calls an http DELETE on a URL and returns the decoded content
         or None on error"""
         req = requests.Request("DELETE", self.url + url)
-        res = self.sess.send(self.sess.prepare_request(req))
+        res = self.sess.send(self.sess.prepare_request(req), verify=False)
 
         if self._is_success(res.status_code):
             return res.content
