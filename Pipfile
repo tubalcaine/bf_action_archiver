@@ -9,6 +9,7 @@ pylint = "*"
 black = "*"
 pytest = "*"
 pyinstaller = "*"
+keyring = "*"
 
 [dev-packages]
 pylint = "*"
