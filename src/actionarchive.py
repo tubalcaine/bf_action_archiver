@@ -95,7 +95,7 @@ def main():
     actquery = f"""(id of it, state of it, name of it, time issued of it,
     name of issuer of it | "_DeletedOperator", multiple flag of it) 
     of bes actions 
-    whose ({conf.whose} and ((now - time issued of it) > {conf.older}*day) and 
+    whose ({conf.whose} and ((now - time issued of it) > {conf.older}*day) and
     top level flag of it and
     (state of it = "Expired" or state of it = "Stopped"))""".strip()
 
@@ -160,7 +160,8 @@ def main():
         ## directory and populate it with component actions
         if actid[5]:
             mag_query = f"""
-            (id of it, state of it, name of it) of member actions of bes action whose (id of it = {actid[0]})
+            (id of it, state of it, name of it) of member actions of bes action
+              whose (id of it = {actid[0]})
             """
             mag_components = big_fix.relevance_query_json(mag_query)
             if mag_components is None:
