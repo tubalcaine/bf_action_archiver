@@ -8,16 +8,109 @@ import argparse
 import os
 import sys
 import json
+import zipfile
+import tarfile
+from datetime import datetime
 
 import keyring
 import keyring.backends
 import bigfixREST
 
+VERSION = "1.0.0"
+
+
+class ArchiveWriter:
+    """Abstraction for writing files to either a directory or archive format"""
+
+    def __init__(self, path, verbose=False):
+        self.path = path
+        self.verbose = verbose
+        self.archive_type = self._detect_archive_type()
+        self.archive_handle = None
+
+        if self.archive_type == "zip":
+            self.archive_handle = zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED)
+            if self.verbose:
+                print(f"Creating ZIP archive: {path}")
+        elif self.archive_type == "tar":
+            self.archive_handle = tarfile.open(path, "w")
+            if self.verbose:
+                print(f"Creating TAR archive: {path}")
+        elif self.archive_type == "tar.gz":
+            self.archive_handle = tarfile.open(path, "w:gz")
+            if self.verbose:
+                print(f"Creating TAR.GZ archive: {path}")
+        else:
+            # Directory mode
+            os.makedirs(path, exist_ok=True)
+            if self.verbose:
+                print(f"Creating directory structure: {path}")
+
+    def _detect_archive_type(self):
+        """Detect archive type based on file extension"""
+        lower_path = self.path.lower()
+        if lower_path.endswith(".zip"):
+            return "zip"
+        elif lower_path.endswith(".tar.gz") or lower_path.endswith(".tgz"):
+            return "tar.gz"
+        elif lower_path.endswith(".tar"):
+            return "tar"
+        else:
+            return "directory"
+
+    def makedirs(self, dir_path, exist_ok=True):
+        """Create directory - no-op for archives, actual mkdir for directories"""
+        if self.archive_type == "directory":
+            os.makedirs(dir_path, exist_ok=exist_ok)
+
+    def write_file(self, file_path, content):
+        """Write a file to either directory or archive"""
+        if self.archive_type == "zip":
+            # For ZIP archives, add the content as bytes
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+            self.archive_handle.writestr(file_path, content)
+        elif self.archive_type in ("tar", "tar.gz"):
+            # For TAR archives, create a TarInfo object
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+            tarinfo = tarfile.TarInfo(name=file_path)
+            tarinfo.size = len(content)
+            tarinfo.mtime = datetime.now().timestamp()
+            import io
+            self.archive_handle.addfile(tarinfo, io.BytesIO(content))
+        else:
+            # Directory mode - write actual file
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+    def get_path(self, *parts):
+        """Get a path suitable for this writer (forward slashes for archives)"""
+        if self.archive_type == "directory":
+            return os.path.join(*parts)
+        else:
+            # Archives use forward slashes
+            return "/".join(parts)
+
+    def close(self):
+        """Finalize the archive if needed"""
+        if self.archive_handle:
+            self.archive_handle.close()
+            if self.verbose:
+                print(f"Archive finalized: {self.path}")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
 
 def main():
     """main routine"""
     ## MAIN code begins:
-    print("BigFix Action Archiver v1.0")
+    print(f"BigFix Action Archiver v{VERSION}")
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -48,7 +141,7 @@ def main():
         "-f",
         "--folder",
         type=str,
-        help="Folder to write to. Default ./aarchive",
+        help="Output path: directory or archive file (.zip, .tar, .tar.gz, .tgz). Default: ./aarchive",
         default="./aarchive",
     )
     parser.add_argument(
@@ -73,7 +166,20 @@ def main():
         help="Set credentials store by key name: Ex -s mykey",
         type=str,
     )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="store_true",
+        help="Display version information and exit",
+    )
     conf = parser.parse_args()
+
+    # Handle version display
+    if conf.version:
+        print(f"BigFix Action Archiver")
+        print(f"Version: {VERSION}")
+        print(f"Python REST API tool for archiving BigFix actions")
+        sys.exit(0)
 
     # setcreds is a "single" operation, do it and terminate.
     if conf.setcreds is not None:
@@ -85,8 +191,8 @@ def main():
     else:
         bfpass = conf.bfpass
 
-    # Create the dest folder if it does not exist
-    os.makedirs(conf.folder, exist_ok=True)
+    # Create the archive writer (handles both directories and archive files)
+    writer = ArchiveWriter(conf.folder, verbose=conf.verbose)
 
     big_fix = bigfixREST.BigfixRESTConnection(
         conf.bfserver, conf.bfport, conf.bfuser, bfpass
@@ -111,15 +217,19 @@ def main():
     if conf.verbose:
         print(f"Action query returned {len(ares['result'])} results.")
 
-    with open(conf.folder + "/action_data.json", "w", encoding="utf-8") as f_handle:
-        f_handle.write(json.dumps(ares, sort_keys=True, indent=4))
+    # Write action data
+    writer.write_file(
+        writer.get_path("action_data.json"),
+        json.dumps(ares, sort_keys=True, indent=4)
+    )
 
-    with open(
-        conf.folder + "/execution_config_data.json", "w", encoding="utf-8"
-    ) as f_handle:
-        v_conf = vars(conf)
-        v_conf["bfpass"] = "Removed_for_Security"
-        f_handle.write(json.dumps(v_conf, sort_keys=True, indent=4))
+    # Write execution config data
+    v_conf = vars(conf)
+    v_conf["bfpass"] = "Removed_for_Security"
+    writer.write_file(
+        writer.get_path("execution_config_data.json"),
+        json.dumps(v_conf, sort_keys=True, indent=4)
+    )
 
     for actid in ares["result"]:
         acturl = f"/api/action/{str(actid[0])}"
@@ -138,23 +248,22 @@ def main():
             print("REST API Call failed.")
             sys.exit(1)
 
-        actpath = f"{conf.folder}/{actid[4]}"
-        os.makedirs(actpath, exist_ok=True)
+        actpath = writer.get_path(actid[4])
+        writer.makedirs(actpath, exist_ok=True)
 
-        with open(
-            f"{actpath}/{str(actid[0])}_action.xml", "w", encoding="utf-8"
-        ) as act_file:
-            act_file.write(action)
-
-        with open(
-            f"{actpath}/{str(actid[0])}_result.xml", "w", encoding="utf-8"
-        ) as act_file:
-            act_file.write(action_status)
-
-        with open(
-            f"{actpath}/{str(actid[0])}_META.txt", "w", encoding="utf-8"
-        ) as act_file:
-            act_file.write(json.dumps(actid, sort_keys=True, indent=4))
+        # Write action files
+        writer.write_file(
+            writer.get_path(actid[4], f"{str(actid[0])}_action.xml"),
+            action
+        )
+        writer.write_file(
+            writer.get_path(actid[4], f"{str(actid[0])}_result.xml"),
+            action_status
+        )
+        writer.write_file(
+            writer.get_path(actid[4], f"{str(actid[0])}_META.txt"),
+            json.dumps(actid, sort_keys=True, indent=4)
+        )
 
         ## If we are a multiple action group, we need to make a MAG
         ## directory and populate it with component actions
@@ -168,8 +277,8 @@ def main():
                 print(f"Could not get member actions of MAG id {actid[0]}")
                 sys.exit(1)
 
-            mag_path = f"{actpath}/{actid[0]}_MAG"
-            os.makedirs(mag_path, exist_ok=True)
+            mag_path = writer.get_path(actid[4], f"{actid[0]}_MAG")
+            writer.makedirs(mag_path, exist_ok=True)
 
             for mag_id in mag_components["result"]:
                 magurl = f"/api/action/{str(mag_id[0])}"
@@ -188,15 +297,15 @@ def main():
                     print("REST API Call failed.")
                     sys.exit(1)
 
-                with open(
-                    f"{mag_path}/{str(mag_id[0])}_action.xml", "w", encoding="utf-8"
-                ) as act_file:
-                    act_file.write(action)
-
-                with open(
-                    f"{mag_path}/{str(mag_id[0])}_result.xml", "w", encoding="utf-8"
-                ) as act_file:
-                    act_file.write(action_status)
+                # Write MAG action files
+                writer.write_file(
+                    writer.get_path(actid[4], f"{actid[0]}_MAG", f"{str(mag_id[0])}_action.xml"),
+                    mag_action
+                )
+                writer.write_file(
+                    writer.get_path(actid[4], f"{actid[0]}_MAG", f"{str(mag_id[0])}_result.xml"),
+                    mag_action_status
+                )
 
         # Back the main flow...
         if conf.verbose:
@@ -212,6 +321,9 @@ def main():
                     print(
                         f"[DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
                     )
+
+    # Close the writer to finalize any archive
+    writer.close()
     sys.exit(0)
 
 
