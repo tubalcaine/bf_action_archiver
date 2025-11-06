@@ -191,6 +191,23 @@ def main():
     else:
         bfpass = conf.bfpass
 
+    # If password is still not set, prompt for it with double-entry verification
+    if bfpass is None:
+        onepass = "not"  # Set to ensure mismatch and avoid fail msg 1st time
+        twopass = ""
+        print(f"Enter the password for the user {conf.bfuser}")
+        print("The password will not display. You must enter the same")
+        print("password twice in a row for verification.")
+
+        while onepass != twopass:
+            if onepass != "not":
+                print("\nPasswords did not match. Try again.\n")
+
+            onepass = getpass(f"BigFix password for {conf.bfuser}: ")
+            twopass = getpass("Enter the password again: ")
+
+        bfpass = onepass
+
     # Create the archive writer (handles both directories and archive files)
     writer = ArchiveWriter(conf.folder, verbose=conf.verbose)
 
