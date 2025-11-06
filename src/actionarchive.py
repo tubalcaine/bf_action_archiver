@@ -15,6 +15,7 @@ from datetime import datetime
 import keyring
 import keyring.backends
 import bigfixREST
+from bigfixREST import BigfixRESTError, BigfixConnectionError, BigfixAuthenticationError, BigfixAPIError
 
 VERSION = "1.0.1"
 
@@ -148,7 +149,10 @@ def main():
         "-d", "--delete", action="store_true", help="Delete archived actions"
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Verbose output (show details)"
+        "-v", "--verbose", action="store_true", help="Verbose output (show extra details)"
+    )
+    parser.add_argument(
+        "-q", "--quiet", action="store_true", help="Quiet mode (suppress progress messages)"
     )
     parser.add_argument(
         "-w",
@@ -209,30 +213,43 @@ def main():
         bfpass = onepass
 
     # Create the archive writer (handles both directories and archive files)
+    # Show writer creation only in verbose mode
     writer = ArchiveWriter(conf.folder, verbose=conf.verbose)
 
-    big_fix = bigfixREST.BigfixRESTConnection(
-        conf.bfserver, conf.bfport, conf.bfuser, bfpass
-    )
+    # Connect to BigFix server
+    try:
+        big_fix = bigfixREST.BigfixRESTConnection(
+            conf.bfserver, conf.bfport, conf.bfuser, bfpass
+        )
+    except BigfixAuthenticationError as e:
+        print(f"AUTHENTICATION ERROR: {e}")
+        sys.exit(1)
+    except BigfixConnectionError as e:
+        print(f"CONNECTION ERROR: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"UNEXPECTED ERROR connecting to BigFix: {e}")
+        sys.exit(1)
 
     actquery = f"""(id of it, state of it, name of it, time issued of it,
-    name of issuer of it | "_DeletedOperator", multiple flag of it) 
-    of bes actions 
+    name of issuer of it | "_DeletedOperator", multiple flag of it)
+    of bes actions
     whose ({conf.whose} and ((now - time issued of it) > {conf.older}*day) and
     top level flag of it and
     (state of it = "Expired" or state of it = "Stopped"))""".strip()
 
-    ares = big_fix.relevance_query_json(actquery)
-
-    if ares is None:
-        print(
-            "Query result is None: "
-            + "This usually means BigFix connection failed or did not authenticate"
-        )
+    # Query for actions to archive
+    try:
+        ares = big_fix.relevance_query_json(actquery)
+    except BigfixAPIError as e:
+        print(f"QUERY ERROR: {e}")
+        if conf.verbose:
+            print(f"Query was: {actquery}")
         sys.exit(1)
 
-    if conf.verbose:
-        print(f"Action query returned {len(ares['result'])} results.")
+    # Report query results (unless quiet)
+    if not conf.quiet:
+        print(f"Found {len(ares['result'])} action(s) to archive.")
 
     # Write action data
     writer.write_file(
@@ -250,19 +267,20 @@ def main():
 
     for actid in ares["result"]:
         acturl = f"/api/action/{str(actid[0])}"
+
+        # Report action being processed (unless quiet)
+        if not conf.quiet:
+            print(f"Archiving action {actid[0]}: {actid[2]} (by {actid[4]})")
+
+        # Verbose mode shows the API URL details
         if conf.verbose:
-            print(f"Processing action url [{acturl}]")
+            print(f"  Fetching from API: {acturl}")
 
-        action = str(big_fix.api_get(acturl))
-
-        if action is None:
-            print("REST API Call failed.")
-            sys.exit(1)
-
-        action_status = str(big_fix.api_get(acturl + "/status"))
-
-        if action_status is None:
-            print("REST API Call failed.")
+        try:
+            action = str(big_fix.api_get(acturl))
+            action_status = str(big_fix.api_get(acturl + "/status"))
+        except BigfixAPIError as e:
+            print(f"ERROR fetching action {actid[0]}: {e}")
             sys.exit(1)
 
         actpath = writer.get_path(actid[4])
@@ -289,9 +307,10 @@ def main():
             (id of it, state of it, name of it) of member actions of bes action
               whose (id of it = {actid[0]})
             """
-            mag_components = big_fix.relevance_query_json(mag_query)
-            if mag_components is None:
-                print(f"Could not get member actions of MAG id {actid[0]}")
+            try:
+                mag_components = big_fix.relevance_query_json(mag_query)
+            except BigfixAPIError as e:
+                print(f"ERROR querying member actions of MAG {actid[0]}: {e}")
                 sys.exit(1)
 
             mag_path = writer.get_path(actid[4], f"{actid[0]}_MAG")
@@ -299,19 +318,20 @@ def main():
 
             for mag_id in mag_components["result"]:
                 magurl = f"/api/action/{str(mag_id[0])}"
+
+                # Report MAG sub-action (unless quiet)
+                if not conf.quiet:
+                    print(f"  - MAG sub-action {mag_id[0]}: {mag_id[2]}")
+
+                # Verbose mode shows the API URL details
                 if conf.verbose:
-                    print(f"Processing MAG action url [{magurl}]")
+                    print(f"    Fetching from API: {magurl}")
 
-                mag_action = str(big_fix.api_get(magurl))
-
-                if mag_action is None:
-                    print("REST API Call failed.")
-                    sys.exit(1)
-
-                mag_action_status = str(big_fix.api_get(magurl + "/status"))
-
-                if mag_action_status is None:
-                    print("REST API Call failed.")
+                try:
+                    mag_action = str(big_fix.api_get(magurl))
+                    mag_action_status = str(big_fix.api_get(magurl + "/status"))
+                except BigfixAPIError as e:
+                    print(f"ERROR fetching MAG sub-action {mag_id[0]}: {e}")
                     sys.exit(1)
 
                 # Write MAG action files
@@ -324,23 +344,35 @@ def main():
                     mag_action_status
                 )
 
-        # Back the main flow...
-        if conf.verbose:
-            print(f"Action {acturl} written to {actpath}")
-
+        # Report deletion (unless quiet)
         if conf.delete:
-            if action is not None and action_status is not None:
-                durl = f"/api/action/{str(actid[0])}"
-                if conf.verbose:
-                    print(f"Running REST API [DELETE {durl}]")
+            durl = f"/api/action/{str(actid[0])}"
+
+            # Verbose mode shows the API details
+            if conf.verbose:
+                print(f"  Running REST API: DELETE {durl}")
+
+            try:
                 delres = big_fix.api_delete(durl)
                 if delres != b"ok":
                     print(
-                        f"[DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
+                        f"WARNING: [DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
                     )
+                elif not conf.quiet:
+                    print(f"  Deleted action {actid[0]} from server")
+            except BigfixAPIError as e:
+                print(f"ERROR deleting action {actid[0]}: {e}")
+                sys.exit(1)
 
     # Close the writer to finalize any archive
     writer.close()
+
+    # Print summary (unless quiet)
+    if not conf.quiet:
+        print(f"\nArchiving complete: {len(ares['result'])} action(s) processed.")
+        if conf.delete:
+            print(f"Actions deleted from server.")
+
     sys.exit(0)
 
 

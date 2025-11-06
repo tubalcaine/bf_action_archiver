@@ -17,6 +17,41 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # End of warning supression
 
 
+class BigfixRESTError(Exception):
+    """Base exception for BigFix REST API errors"""
+    def __init__(self, message, url=None, status_code=None, reason=None):
+        self.message = message
+        self.url = url
+        self.status_code = status_code
+        self.reason = reason
+        super().__init__(self.message)
+
+    def __str__(self):
+        parts = [self.message]
+        if self.url:
+            parts.append(f"URL: {self.url}")
+        if self.status_code:
+            parts.append(f"HTTP {self.status_code}")
+        if self.reason:
+            parts.append(f"Reason: {self.reason}")
+        return " | ".join(parts)
+
+
+class BigfixConnectionError(BigfixRESTError):
+    """Raised when connection to BigFix server fails"""
+    pass
+
+
+class BigfixAuthenticationError(BigfixRESTError):
+    """Raised when authentication fails"""
+    pass
+
+
+class BigfixAPIError(BigfixRESTError):
+    """Raised when API call returns an error"""
+    pass
+
+
 ## bigFixActionResult class
 class BigfixActionResult:
     """A class that represents an API Action Result"""
@@ -56,9 +91,37 @@ class BigfixRESTConnection:
         self.initialized = 0
 
         self.sess.auth = (self.bfuser, self.bfpass)
-        resp = self.sess.get(self.url + "/api/login", verify=False)
-        if resp.ok:
-            self.initialized = 1
+        try:
+            resp = self.sess.get(self.url + "/api/login", verify=False, timeout=30)
+            if resp.ok:
+                self.initialized = 1
+            else:
+                if resp.status_code == 401:
+                    raise BigfixAuthenticationError(
+                        "Authentication failed - invalid username or password",
+                        url=self.url + "/api/login",
+                        status_code=resp.status_code,
+                        reason=resp.reason
+                    )
+                else:
+                    raise BigfixConnectionError(
+                        "Failed to connect to BigFix server",
+                        url=self.url + "/api/login",
+                        status_code=resp.status_code,
+                        reason=resp.reason
+                    )
+        except requests.exceptions.RequestException as e:
+            raise BigfixConnectionError(
+                f"Network error connecting to BigFix server: {str(e)}",
+                url=self.url + "/api/login"
+            )
+
+    def _check_initialized(self):
+        """Check if connection is initialized before making API calls"""
+        if not self.initialized:
+            raise BigfixConnectionError(
+                "BigFix connection not initialized - authentication may have failed"
+            )
 
     def _is_success(self, http_return_value):
         rv_diff = http_return_value - 200
@@ -68,50 +131,86 @@ class BigfixRESTConnection:
         return False
 
     def relevance_query_json(self, srquery):
-        """Takes a session relevance query and returns a JSON string
-        on success and None on error"""
-        qheader = {"Content-Type": "application/x-www-form-urlencoded"}
+        """Takes a session relevance query and returns a JSON dict
+        Raises BigfixAPIError on failure"""
+        self._check_initialized()
 
+        qheader = {"Content-Type": "application/x-www-form-urlencoded"}
         qquery = {"relevance": srquery, "output": "json"}
 
-        req = requests.Request(
-            "POST", self.url + "/api/query", headers=qheader, data=qquery
-        )
+        try:
+            req = requests.Request(
+                "POST", self.url + "/api/query", headers=qheader, data=qquery
+            )
+            prepped = self.sess.prepare_request(req)
+            result = self.sess.send(prepped, verify=False, timeout=120)
 
-        prepped = self.sess.prepare_request(req)
-        result = self.sess.send(prepped, verify=False)
-
-        if result.status_code == 200:
-            retval = json.loads(result.text)
-            retval["query"] = srquery
-            return retval
-
-        return None
+            if result.status_code == 200:
+                retval = json.loads(result.text)
+                retval["query"] = srquery
+                return retval
+            else:
+                raise BigfixAPIError(
+                    "Session relevance query failed",
+                    url=self.url + "/api/query",
+                    status_code=result.status_code,
+                    reason=result.reason
+                )
+        except requests.exceptions.RequestException as e:
+            raise BigfixAPIError(
+                f"Network error during relevance query: {str(e)}",
+                url=self.url + "/api/query"
+            )
 
     ## Rawest possible GET
     def api_get(self, url):
         """Does an http GET on a URL and returns the decoded result
-        or None on error"""
-        req = requests.Request("GET", self.url + url)
-        res = self.sess.send(self.sess.prepare_request(req), verify=False)
+        Raises BigfixAPIError on failure"""
+        self._check_initialized()
 
-        if not self._is_success(res.status_code):
-            print(f"Error: {res.status_code} Reason: {res.reason}")
-            return None
+        try:
+            req = requests.Request("GET", self.url + url)
+            res = self.sess.send(self.sess.prepare_request(req), verify=False, timeout=60)
 
-        return res.text
+            if not self._is_success(res.status_code):
+                raise BigfixAPIError(
+                    "API GET request failed",
+                    url=self.url + url,
+                    status_code=res.status_code,
+                    reason=res.reason
+                )
+
+            return res.text
+        except requests.exceptions.RequestException as e:
+            raise BigfixAPIError(
+                f"Network error during GET request: {str(e)}",
+                url=self.url + url
+            )
 
     ## Rawest possible DELETE
     def api_delete(self, url):
         """Calls an http DELETE on a URL and returns the decoded content
-        or None on error"""
-        req = requests.Request("DELETE", self.url + url)
-        res = self.sess.send(self.sess.prepare_request(req), verify=False)
+        Raises BigfixAPIError on failure"""
+        self._check_initialized()
 
-        if self._is_success(res.status_code):
-            return res.content
+        try:
+            req = requests.Request("DELETE", self.url + url)
+            res = self.sess.send(self.sess.prepare_request(req), verify=False, timeout=60)
 
-        return None
+            if self._is_success(res.status_code):
+                return res.content
+            else:
+                raise BigfixAPIError(
+                    "API DELETE request failed",
+                    url=self.url + url,
+                    status_code=res.status_code,
+                    reason=res.reason
+                )
+        except requests.exceptions.RequestException as e:
+            raise BigfixAPIError(
+                f"Network error during DELETE request: {str(e)}",
+                url=self.url + url
+            )
 
     # The idea of this stub method is that we can parse up the return tuple, mangling the
     # relevance property names to single tokens, and then returning an array of dictionaries,
