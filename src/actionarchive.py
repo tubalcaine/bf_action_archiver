@@ -155,6 +155,13 @@ def main():
         "-q", "--quiet", action="store_true", help="Quiet mode (suppress progress messages)"
     )
     parser.add_argument(
+        "-n",
+        "--progress",
+        type=int,
+        default=10,
+        help="Report progress every N actions (default: 10, 0 to disable)",
+    )
+    parser.add_argument(
         "-w",
         "--whose",
         type=str,
@@ -177,6 +184,11 @@ def main():
         help="Display version information and exit",
     )
     conf = parser.parse_args()
+
+    # Validate progress argument
+    if conf.progress < 0:
+        print("ERROR: Progress interval must be 0 or greater")
+        sys.exit(1)
 
     # Handle version display
     if conf.version:
@@ -267,6 +279,8 @@ def main():
 
     # Phase 1: Archive all actions (collect IDs for deletion if needed)
     actions_to_delete = []
+    total_actions = len(ares["result"])
+    actions_processed = 0
 
     for actid in ares["result"]:
         acturl = f"/api/action/{str(actid[0])}"
@@ -350,6 +364,16 @@ def main():
         # Collect action ID for deletion (if delete flag is set)
         if conf.delete:
             actions_to_delete.append(actid)
+
+        # Increment counter and report progress if needed
+        actions_processed += 1
+        if (not conf.quiet and
+            conf.progress > 0 and
+            actions_processed % conf.progress == 0 and
+            actions_processed < total_actions):
+            remaining = total_actions - actions_processed
+            percentage = (actions_processed / total_actions) * 100
+            print(f"Progress: {actions_processed}/{total_actions} actions archived ({percentage:.1f}% complete, {remaining} remaining)")
 
     # Close the writer to finalize any archive
     # This ensures all files are written to disk before any deletions occur

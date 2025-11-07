@@ -93,6 +93,8 @@ Archive options:
 Output options:
   -v, --verbose         Verbose output (show API URLs and extra details)
   -q, --quiet           Quiet mode (suppress progress messages, only show errors)
+  -n PROGRESS, --progress PROGRESS
+                        Report progress every N actions (default: 10, 0 to disable)
 ```
 
 ### Password Handling
@@ -187,6 +189,16 @@ python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip 
 python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip -v
 ```
 
+**Custom progress interval (report every 5 actions):**
+```bash
+python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip -n 5
+```
+
+**Disable progress reporting (show only individual actions):**
+```bash
+python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip -n 0
+```
+
 **Schedule with cron (quiet mode for log files):**
 ```bash
 # Run daily at 2 AM, log only errors
@@ -201,25 +213,32 @@ The tool provides three levels of output verbosity:
 
 ### Default Mode (no flags)
 
-Reports progress for each action being processed:
+Reports progress for each action being processed, with periodic progress summaries:
 
 ```
 BigFix Action Archiver v1.0.1
-Found 5 action(s) to archive.
+Found 45 action(s) to archive.
 Archiving action 123: Install Security Patch (by admin)
 Archiving action 124: Update Software (by jsmith)
   - MAG sub-action 125: Component A
   - MAG sub-action 126: Component B
 Archiving action 125: Windows Updates (by admin)
 ...
-
-Archive complete. Deleting 5 action(s) from server...
-  Deleted action 123: Install Security Patch
-  Deleted action 124: Update Software
-  Deleted action 125: Windows Updates
+Progress: 10/45 actions archived (22.2% complete, 35 remaining)
+...
+Progress: 20/45 actions archived (44.4% complete, 25 remaining)
+...
+Progress: 30/45 actions archived (66.7% complete, 15 remaining)
+...
+Progress: 40/45 actions archived (88.9% complete, 5 remaining)
 ...
 
-Complete: 5 action(s) archived and deleted.
+Archive complete. Deleting 45 action(s) from server...
+  Deleted action 123: Install Security Patch
+  Deleted action 124: Update Software
+...
+
+Complete: 45 action(s) archived and deleted.
 ```
 
 ### Quiet Mode (`-q`)
