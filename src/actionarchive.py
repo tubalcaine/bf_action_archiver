@@ -12,6 +12,7 @@ import zipfile
 import tarfile
 import threading
 import concurrent.futures
+import time
 from datetime import datetime
 
 import keyring
@@ -220,6 +221,45 @@ def process_action(actid, big_fix, writer, conf, progress_lock, actions_processe
         return (False, actid, e)
 
 
+def format_elapsed_time(seconds):
+    """Format elapsed time in human readable format"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+
+    if hours > 0:
+        return f"{hours}h {minutes}m {secs}s"
+    elif minutes > 0:
+        return f"{minutes}m {secs}s"
+    else:
+        return f"{secs}s"
+
+
+def print_performance_summary(start_time, start_datetime, total_actions, quiet=False):
+    """Print performance metrics summary"""
+    if quiet:
+        return
+
+    end_time = time.time()
+    end_datetime = datetime.now()
+    elapsed_seconds = end_time - start_time
+
+    # Calculate actions per minute
+    if elapsed_seconds > 0:
+        actions_per_minute = (total_actions / elapsed_seconds) * 60
+    else:
+        actions_per_minute = 0
+
+    print(f"\n{'='*60}")
+    print(f"Performance Summary:")
+    print(f"  Start time:          {start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  End time:            {end_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Elapsed time:        {format_elapsed_time(elapsed_seconds)}")
+    print(f"  Actions processed:   {total_actions}")
+    print(f"  Processing rate:     {actions_per_minute:.1f} actions/minute")
+    print(f"{'='*60}")
+
+
 def main():
     """main routine"""
     ## MAIN code begins:
@@ -411,6 +451,10 @@ def main():
     if not conf.quiet:
         print(f"Found {len(ares['result'])} action(s) to archive.")
 
+    # Record start time for performance metrics
+    start_time = time.time()
+    start_datetime = datetime.now()
+
     # Write action data
     writer.write_file(
         writer.get_path("action_data.json"),
@@ -540,6 +584,7 @@ def main():
                 print(f"  Action {actid[0]} ({actid[2]}): {error}")
         if conf.batch_size == 0:  # Only exit if not batching (batching continues on errors)
             print(f"\nArchiving incomplete due to errors. No actions will be deleted.")
+            print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
             sys.exit(1)
 
     # Close the writer to finalize any archive
@@ -569,6 +614,7 @@ def main():
             except BigfixAPIError as e:
                 print(f"ERROR deleting action {actid[0]}: {e}")
                 print(f"Archive is complete but some actions may not have been deleted.")
+                print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
                 sys.exit(1)
 
     # Print final summary (unless quiet)
@@ -577,6 +623,9 @@ def main():
             print(f"\nComplete: {len(ares['result'])} action(s) archived.")
         else:
             print(f"\nComplete: {len(ares['result'])} action(s) archived and deleted.")
+
+    # Print performance summary
+    print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
 
     sys.exit(0)
 
