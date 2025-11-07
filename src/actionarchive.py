@@ -93,9 +93,10 @@ class ArchiveWriter:
     def get_path(self, *parts):
         """Get a path suitable for this writer (forward slashes for archives)"""
         if self.archive_type == "directory":
-            return os.path.join(*parts)
+            # For directories, prepend the base path
+            return os.path.join(self.path, *parts)
         else:
-            # Archives use forward slashes
+            # Archives use forward slashes (no base path needed, handled by archive)
             return "/".join(parts)
 
     def close(self):
