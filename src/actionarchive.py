@@ -265,6 +265,9 @@ def main():
         json.dumps(v_conf, sort_keys=True, indent=4)
     )
 
+    # Phase 1: Archive all actions (collect IDs for deletion if needed)
+    actions_to_delete = []
+
     for actid in ares["result"]:
         acturl = f"/api/action/{str(actid[0])}"
 
@@ -344,8 +347,20 @@ def main():
                     mag_action_status
                 )
 
-        # Report deletion (unless quiet)
+        # Collect action ID for deletion (if delete flag is set)
         if conf.delete:
+            actions_to_delete.append(actid)
+
+    # Close the writer to finalize any archive
+    # This ensures all files are written to disk before any deletions occur
+    writer.close()
+
+    # Phase 2: Delete actions from server (only after archive is complete)
+    if conf.delete and actions_to_delete:
+        if not conf.quiet:
+            print(f"\nArchive complete. Deleting {len(actions_to_delete)} action(s) from server...")
+
+        for actid in actions_to_delete:
             durl = f"/api/action/{str(actid[0])}"
 
             # Verbose mode shows the API details
@@ -359,19 +374,18 @@ def main():
                         f"WARNING: [DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
                     )
                 elif not conf.quiet:
-                    print(f"  Deleted action {actid[0]} from server")
+                    print(f"  Deleted action {actid[0]}: {actid[2]}")
             except BigfixAPIError as e:
                 print(f"ERROR deleting action {actid[0]}: {e}")
+                print(f"Archive is complete but some actions may not have been deleted.")
                 sys.exit(1)
 
-    # Close the writer to finalize any archive
-    writer.close()
-
-    # Print summary (unless quiet)
+    # Print final summary (unless quiet)
     if not conf.quiet:
-        print(f"\nArchiving complete: {len(ares['result'])} action(s) processed.")
-        if conf.delete:
-            print(f"Actions deleted from server.")
+        if not conf.delete:
+            print(f"\nComplete: {len(ares['result'])} action(s) archived.")
+        else:
+            print(f"\nComplete: {len(ares['result'])} action(s) archived and deleted.")
 
     sys.exit(0)
 

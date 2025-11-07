@@ -210,12 +210,16 @@ Archiving action 123: Install Security Patch (by admin)
 Archiving action 124: Update Software (by jsmith)
   - MAG sub-action 125: Component A
   - MAG sub-action 126: Component B
-  Deleted action 124 from server
 Archiving action 125: Windows Updates (by admin)
 ...
 
-Archiving complete: 5 action(s) processed.
-Actions deleted from server.
+Archive complete. Deleting 5 action(s) from server...
+  Deleted action 123: Install Security Patch
+  Deleted action 124: Update Software
+  Deleted action 125: Windows Updates
+...
+
+Complete: 5 action(s) archived and deleted.
 ```
 
 ### Quiet Mode (`-q`)
@@ -246,13 +250,17 @@ Archiving action 124: Update Software (by jsmith)
   Fetching from API: /api/action/124
   - MAG sub-action 125: Component A
     Fetching from API: /api/action/125
+...
+Archive finalized: archive.zip
+
+Archive complete. Deleting 5 action(s) from server...
+  Running REST API: DELETE /api/action/123
+  Deleted action 123: Install Security Patch
   Running REST API: DELETE /api/action/124
-  Deleted action 124 from server
+  Deleted action 124: Update Software
 ...
 
-Archiving complete: 5 action(s) processed.
-Actions deleted from server.
-Archive finalized: archive.zip
+Complete: 5 action(s) archived and deleted.
 ```
 
 ## Error Handling
@@ -304,7 +312,16 @@ pip install argparse keyring requests
 
 ## Notes
 
+- **Two-Phase Operation**: When using `-d/--delete`, the tool operates in two phases:
+  1. **Archive Phase**: All actions are fetched and written to disk/archive
+  2. **Delete Phase**: Only after the archive is complete and finalized, actions are deleted from the server
+
+  This ensures that if the process is interrupted, the archive is either complete or the actions remain on the server. You will never lose actions without having a complete archive.
+
 - **SSL Verification**: The tool disables SSL certificate verification to work with BigFix's self-signed certificates. This is normal for BigFix environments.
+
 - **Timeouts**: Connection timeout is 30 seconds, queries timeout at 120 seconds, API calls timeout at 60 seconds.
+
 - **MAG Support**: Multiple Action Groups (baselines) are automatically detected and their sub-actions are archived in `{action_id}_MAG/` subdirectories.
+
 - **Secure Storage**: When using `-s` to store credentials, passwords are stored encrypted in your system's secure credential store (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux).
