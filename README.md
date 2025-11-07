@@ -57,7 +57,7 @@ usage: actionarchive [-h] [-b BFSERVER] [-p BFPORT] -u BFUSER [-P BFPASS]
                      [-o OLDER] [-f FOLDER] [-d] [-v] [-q] [-w WHOSE]
                      [-k KEYCREDS] [-s SETCREDS] [-V]
 
-BigFix Action Archiver v1.0.1
+BigFix Action Archiver v1.1.0
 
 optional arguments:
   -h, --help            Show this help message and exit
@@ -95,6 +95,12 @@ Output options:
   -q, --quiet           Quiet mode (suppress progress messages, only show errors)
   -n PROGRESS, --progress PROGRESS
                         Report progress every N actions (default: 10, 0 to disable)
+
+Performance options:
+  -t THREADS, --threads THREADS
+                        Number of worker threads for parallel processing (default: 1)
+  -B BATCH_SIZE, --batch-size BATCH_SIZE
+                        Process actions in batches of N (directory output only, 0 to disable, default: 0)
 ```
 
 ### Password Handling
@@ -199,6 +205,93 @@ python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip 
 python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip -n 0
 ```
 
+### Parallel Processing
+
+**Use 5 worker threads for faster archiving:**
+```bash
+python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip -t 5
+```
+
+**Maximum parallelism (10 threads):**
+```bash
+python src/actionarchive.py -b myserver.com -u admin -P password -f archive.zip -t 10
+```
+
+**Combine threading with other options:**
+```bash
+# 5 threads, delete after archiving, quiet mode
+python src/actionarchive.py -b myserver.com -u admin -P password -f archive.tar.gz -t 5 -d -q
+```
+
+**Performance expectations:**
+- **1 thread (default)**: Current single-threaded performance (backward compatible)
+- **5 threads**: ~3-4x speedup for I/O-bound workloads (typical)
+- **10 threads**: ~4-5x speedup (diminishing returns, may stress BigFix server)
+- Actual speedup depends on BigFix server response time and disk speed
+
+**Note:** Using more than 10 threads may overload the BigFix server and is not recommended.
+
+### Batch Processing
+
+Batch processing allows you to process and delete actions in smaller groups, providing incremental progress and reducing risk. This is especially useful for large archiving operations where you want to delete actions incrementally as they're archived.
+
+**Important:** Batch processing only works with directory output (not ZIP/TAR archives).
+
+**Process 100 actions at a time:**
+```bash
+python src/actionarchive.py -b myserver.com -u admin -P password -f ./archive -B 100
+```
+
+**Batch processing with delete (incremental deletion):**
+```bash
+# Archive and delete in batches of 50
+python src/actionarchive.py -b myserver.com -u admin -P password -f ./archive -B 50 -d
+```
+
+**Combine batching with threading:**
+```bash
+# Process 100 actions per batch, using 5 threads per batch
+python src/actionarchive.py -b myserver.com -u admin -P password -f ./archive -B 100 -t 5 -d
+```
+
+**How it works:**
+- Actions are divided into batches of N
+- Each batch is processed with threading (if `-t` > 1)
+- After each batch completes, actions in that batch are deleted (if `-d` flag is set)
+- Progress is reported per batch
+- If a batch encounters errors, processing continues to the next batch
+
+**Benefits:**
+- **Incremental deletion**: Actions are deleted as they're archived, not all at once
+- **Progress visibility**: See completion after each batch
+- **Risk reduction**: If the process is interrupted, only the current batch is affected
+- **Memory efficiency**: Large action sets are processed in manageable chunks
+
+**Example output:**
+```
+BigFix Action Archiver v1.1.0
+Found 250 action(s) to archive.
+Using 5 worker threads for parallel processing.
+Processing 250 actions in 3 batch(es) of 100.
+
+Batch 1/3: Processing 100 action(s)...
+Archiving action 123: Install Security Patch (by admin)
+...
+Progress: 100/250 actions archived (40.0% complete, 150 remaining)
+
+Batch 1 complete. Deleting 100 action(s) from server...
+  Deleted action 123: Install Security Patch
+  ...
+
+Batch 2/3: Processing 100 action(s)...
+...
+
+Batch 3/3: Processing 50 action(s)...
+...
+
+Complete: 250 action(s) archived and deleted.
+```
+
 **Schedule with cron (quiet mode for log files):**
 ```bash
 # Run daily at 2 AM, log only errors
@@ -216,7 +309,7 @@ The tool provides three levels of output verbosity:
 Reports progress for each action being processed, with periodic progress summaries:
 
 ```
-BigFix Action Archiver v1.0.1
+BigFix Action Archiver v1.1.0
 Found 45 action(s) to archive.
 Archiving action 123: Install Security Patch (by admin)
 Archiving action 124: Update Software (by jsmith)
@@ -246,7 +339,7 @@ Complete: 45 action(s) archived and deleted.
 Suppresses all progress messages, only shows errors:
 
 ```
-BigFix Action Archiver v1.0.1
+BigFix Action Archiver v1.1.0
 [Only errors would appear here]
 ```
 
@@ -260,7 +353,7 @@ Ideal for:
 Shows detailed information including API URLs and operations:
 
 ```
-BigFix Action Archiver v1.0.1
+BigFix Action Archiver v1.1.0
 Creating ZIP archive: archive.zip
 Found 5 action(s) to archive.
 Archiving action 123: Install Security Patch (by admin)
@@ -344,3 +437,20 @@ pip install argparse keyring requests
 - **MAG Support**: Multiple Action Groups (baselines) are automatically detected and their sub-actions are archived in `{action_id}_MAG/` subdirectories.
 
 - **Secure Storage**: When using `-s` to store credentials, passwords are stored encrypted in your system's secure credential store (Keychain on macOS, Credential Manager on Windows, Secret Service on Linux).
+
+- **Parallel Processing**: When using `-t/--threads` with a value greater than 1, actions are processed in parallel:
+  - Each action is processed independently by a worker thread
+  - BigFix API calls and disk I/O happen concurrently
+  - All shared resources (archive handles, progress counters) are protected by locks for thread safety
+  - Default is 1 thread (single-threaded, backward compatible)
+  - Recommended: 5-10 threads for optimal performance without overloading the server
+  - The two-phase operation is preserved: all actions are archived before any deletions occur
+
+- **Batch Processing**: When using `-B/--batch-size` with a value greater than 0:
+  - Actions are processed in batches of N
+  - Only works with directory output (not ZIP/TAR archives)
+  - Each batch is archived, then deleted (if `-d` flag set), before moving to the next batch
+  - Provides incremental progress and reduces risk of data loss
+  - Can be combined with threading (`-t`) for maximum performance
+  - If a batch encounters errors, processing continues to the next batch
+  - Default is 0 (disabled - all actions processed at once)

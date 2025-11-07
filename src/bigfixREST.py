@@ -7,6 +7,7 @@ https://github.com/jgstew/besapi
 """
 
 import json
+import threading
 import xml.etree.ElementTree as ET
 import requests
 
@@ -79,20 +80,30 @@ class BigfixActionResult:
 
 ## bigfixRESTConnection class
 class BigfixRESTConnection:
-    """A class that represents one connection to a BigFix REST API"""
+    """A class that represents one connection to a BigFix REST API
+
+    Thread Safety:
+    This class is thread-safe for concurrent requests. Multiple threads can safely
+    call api_get(), api_delete(), and relevance_query_json() on the same instance.
+    Each thread gets its own requests.Session via threading.local() to avoid
+    conflicts with cookies, redirects, and connection pooling. Authentication
+    credentials and configuration are shared across threads.
+    """
 
     def __init__(self, bfserver, bfport, bfuser, bfpass):
         self.bfserver = bfserver
         self.bfport = bfport
         self.bfuser = bfuser
         self.bfpass = bfpass
-        self.sess = requests.Session()
+        self._thread_local = threading.local()  # Each thread gets its own Session
         self.url = "https://" + self.bfserver + ":" + str(self.bfport)
         self.initialized = 0
 
-        self.sess.auth = (self.bfuser, self.bfpass)
+        # Verify authentication works (using a temporary session)
+        test_sess = requests.Session()
+        test_sess.auth = (self.bfuser, self.bfpass)
         try:
-            resp = self.sess.get(self.url + "/api/login", verify=False, timeout=30)
+            resp = test_sess.get(self.url + "/api/login", verify=False, timeout=30)
             if resp.ok:
                 self.initialized = 1
             else:
@@ -115,6 +126,14 @@ class BigfixRESTConnection:
                 f"Network error connecting to BigFix server: {str(e)}",
                 url=self.url + "/api/login"
             )
+
+    def _get_session(self):
+        """Get or create a requests.Session for the current thread"""
+        if not hasattr(self._thread_local, 'session'):
+            # Create a new session for this thread
+            self._thread_local.session = requests.Session()
+            self._thread_local.session.auth = (self.bfuser, self.bfpass)
+        return self._thread_local.session
 
     def _check_initialized(self):
         """Check if connection is initialized before making API calls"""
@@ -139,11 +158,12 @@ class BigfixRESTConnection:
         qquery = {"relevance": srquery, "output": "json"}
 
         try:
+            sess = self._get_session()
             req = requests.Request(
                 "POST", self.url + "/api/query", headers=qheader, data=qquery
             )
-            prepped = self.sess.prepare_request(req)
-            result = self.sess.send(prepped, verify=False, timeout=120)
+            prepped = sess.prepare_request(req)
+            result = sess.send(prepped, verify=False, timeout=120)
 
             if result.status_code == 200:
                 retval = json.loads(result.text)
@@ -169,8 +189,9 @@ class BigfixRESTConnection:
         self._check_initialized()
 
         try:
+            sess = self._get_session()
             req = requests.Request("GET", self.url + url)
-            res = self.sess.send(self.sess.prepare_request(req), verify=False, timeout=60)
+            res = sess.send(sess.prepare_request(req), verify=False, timeout=60)
 
             if not self._is_success(res.status_code):
                 raise BigfixAPIError(
@@ -194,8 +215,9 @@ class BigfixRESTConnection:
         self._check_initialized()
 
         try:
+            sess = self._get_session()
             req = requests.Request("DELETE", self.url + url)
-            res = self.sess.send(self.sess.prepare_request(req), verify=False, timeout=60)
+            res = sess.send(sess.prepare_request(req), verify=False, timeout=60)
 
             if self._is_success(res.status_code):
                 return res.content
@@ -262,13 +284,14 @@ class BigfixRESTConnection:
 
         qheader = {"Content-Type": "application/x-www-form-urlencoded"}
 
+        sess = self._get_session()
         req = requests.Request(
             "POST", self.url + "/api/actions", headers=qheader, data=templ
         )
 
-        prepped = self.sess.prepare_request(req)
+        prepped = sess.prepare_request(req)
 
-        result = self.sess.send(prepped, verify=False)
+        result = sess.send(prepped, verify=False)
 
         if self._is_success(result.status_code):
             print(result)
