@@ -3,6 +3,7 @@ actionarchiver.py - A script that backs up all actions issued more than --days
 ago that are stopped or expired into a directory structure by issuing operator.
 It can optionally delete the actions also. This can provide useful audit
 information while also cleaning up actions that bog down the console."""
+
 from getpass import getpass
 import argparse
 import io
@@ -24,7 +25,9 @@ from bigfixREST import BigfixConnectionError, BigfixAuthenticationError, BigfixA
 
 VERSION = "1.2.0"
 
-ActionRecord = namedtuple("ActionRecord", ["id", "state", "name", "time_issued", "issuer", "is_mag"])
+ActionRecord = namedtuple(
+    "ActionRecord", ["id", "state", "name", "time_issued", "issuer", "is_mag"]
+)
 MagComponent = namedtuple("MagComponent", ["id", "state", "name"])
 
 
@@ -115,7 +118,9 @@ class ArchiveWriter:
         return False
 
 
-def process_action(actid, big_fix, writer, conf, progress_lock, actions_processed, total_actions):
+def process_action(
+    actid, big_fix, writer, conf, progress_lock, actions_processed, total_actions
+):
     """Process a single action in a worker thread
 
     Args:
@@ -148,16 +153,14 @@ def process_action(actid, big_fix, writer, conf, progress_lock, actions_processe
         writer.makedirs(actpath, exist_ok=True)
 
         writer.write_file(
-            writer.get_path(actid.issuer, f"{actid.id}_action.xml"),
-            action
+            writer.get_path(actid.issuer, f"{actid.id}_action.xml"), action
         )
         writer.write_file(
-            writer.get_path(actid.issuer, f"{actid.id}_result.xml"),
-            action_status
+            writer.get_path(actid.issuer, f"{actid.id}_result.xml"), action_status
         )
         writer.write_file(
             writer.get_path(actid.issuer, f"{actid.id}_META.txt"),
-            json.dumps(actid._asdict(), sort_keys=True, indent=4)
+            json.dumps(actid._asdict(), sort_keys=True, indent=4),
         )
 
         if actid.is_mag:
@@ -186,23 +189,31 @@ def process_action(actid, big_fix, writer, conf, progress_lock, actions_processe
                 mag_action_status = str(big_fix.api_get(magurl + "/status"))
 
                 writer.write_file(
-                    writer.get_path(actid.issuer, f"{actid.id}_MAG", f"{mag.id}_action.xml"),
-                    mag_action
+                    writer.get_path(
+                        actid.issuer, f"{actid.id}_MAG", f"{mag.id}_action.xml"
+                    ),
+                    mag_action,
                 )
                 writer.write_file(
-                    writer.get_path(actid.issuer, f"{actid.id}_MAG", f"{mag.id}_result.xml"),
-                    mag_action_status
+                    writer.get_path(
+                        actid.issuer, f"{actid.id}_MAG", f"{mag.id}_result.xml"
+                    ),
+                    mag_action_status,
                 )
 
         with progress_lock:
             actions_processed[0] += 1
-            if (not conf.quiet and
-                conf.progress > 0 and
-                actions_processed[0] % conf.progress == 0 and
-                actions_processed[0] < total_actions):
+            if (
+                not conf.quiet
+                and conf.progress > 0
+                and actions_processed[0] % conf.progress == 0
+                and actions_processed[0] < total_actions
+            ):
                 remaining = total_actions - actions_processed[0]
                 percentage = (actions_processed[0] / total_actions) * 100
-                print(f"Progress: {actions_processed[0]}/{total_actions} actions archived ({percentage:.1f}% complete, {remaining} remaining)")
+                print(
+                    f"Progress: {actions_processed[0]}/{total_actions} actions archived ({percentage:.1f}% complete, {remaining} remaining)"
+                )
 
         return (True, actid, None)
 
@@ -221,7 +232,9 @@ def _delete_action(actid, big_fix, conf):
     try:
         delres = big_fix.api_delete(durl)
         if delres != b"ok":
-            print(f"WARNING: [DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}.")
+            print(
+                f"WARNING: [DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
+            )
         elif not conf.quiet:
             print(f"  Deleted action {actid.id}: {actid.name}")
         return None
@@ -312,10 +325,16 @@ def main():
         "-d", "--delete", action="store_true", help="Delete archived actions"
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Verbose output (show extra details)"
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Verbose output (show extra details)",
     )
     parser.add_argument(
-        "-q", "--quiet", action="store_true", help="Quiet mode (suppress progress messages)"
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Quiet mode (suppress progress messages)",
     )
     parser.add_argument(
         "-n",
@@ -370,19 +389,27 @@ def main():
         print("ERROR: Number of threads must be 1 or greater")
         sys.exit(1)
     if conf.threads > 10:
-        print(f"WARNING: Using {conf.threads} threads may overload the BigFix server. Recommended maximum is 10.")
+        print(
+            f"WARNING: Using {conf.threads} threads may overload the BigFix server. Recommended maximum is 10."
+        )
 
     if conf.batch_size < 0:
         print("ERROR: Batch size must be 0 or greater")
         sys.exit(1)
     if conf.batch_size > 0:
         lower_folder = conf.folder.lower()
-        if (lower_folder.endswith(".zip") or
-            lower_folder.endswith(".tar") or
-            lower_folder.endswith(".tar.gz") or
-            lower_folder.endswith(".tgz")):
-            print("ERROR: Batch processing is only supported with directory output (not ZIP/TAR archives)")
-            print("Remove the -B/--batch-size flag or change output to a directory path")
+        if (
+            lower_folder.endswith(".zip")
+            or lower_folder.endswith(".tar")
+            or lower_folder.endswith(".tar.gz")
+            or lower_folder.endswith(".tgz")
+        ):
+            print(
+                "ERROR: Batch processing is only supported with directory output (not ZIP/TAR archives)"
+            )
+            print(
+                "Remove the -B/--batch-size flag or change output to a directory path"
+            )
             sys.exit(1)
 
     if conf.setcreds is not None:
@@ -451,15 +478,14 @@ def main():
     start_datetime = datetime.now()
 
     writer.write_file(
-        writer.get_path("action_data.json"),
-        json.dumps(ares, sort_keys=True, indent=4)
+        writer.get_path("action_data.json"), json.dumps(ares, sort_keys=True, indent=4)
     )
 
     v_conf = dict(vars(conf))
     v_conf["bfpass"] = "Removed_for_Security"
     writer.write_file(
         writer.get_path("execution_config_data.json"),
-        json.dumps(v_conf, sort_keys=True, indent=4)
+        json.dumps(v_conf, sort_keys=True, indent=4),
     )
 
     progress_lock = threading.Lock()
@@ -472,10 +498,15 @@ def main():
 
     if not conf.quiet and conf.batch_size > 0:
         num_batches = (total_actions + conf.batch_size - 1) // conf.batch_size
-        print(f"Processing {total_actions} actions in {num_batches} batch(es) of {conf.batch_size}.")
+        print(
+            f"Processing {total_actions} actions in {num_batches} batch(es) of {conf.batch_size}."
+        )
 
     if conf.batch_size > 0:
-        batches = [actions[i:i+conf.batch_size] for i in range(0, len(actions), conf.batch_size)]
+        batches = [
+            actions[i : i + conf.batch_size]
+            for i in range(0, len(actions), conf.batch_size)
+        ]
     else:
         batches = [actions]
 
@@ -484,9 +515,13 @@ def main():
         batch_errors = []
 
         if not conf.quiet and conf.batch_size > 0:
-            print(f"\nBatch {batch_num}/{len(batches)}: Processing {len(batch)} action(s)...")
+            print(
+                f"\nBatch {batch_num}/{len(batches)}: Processing {len(batch)} action(s)..."
+            )
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=conf.threads) as executor:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=conf.threads
+        ) as executor:
             futures = {
                 executor.submit(
                     process_action,
@@ -496,7 +531,7 @@ def main():
                     conf,
                     progress_lock,
                     actions_processed,
-                    total_actions
+                    total_actions,
                 ): actid
                 for actid in batch
             }
@@ -516,14 +551,23 @@ def main():
                     batch_errors.append((actid, e))
 
         if batch_errors:
-            print(f"\nERROR in batch {batch_num}: {len(batch_errors)} action(s) failed to archive:")
+            print(
+                f"\nERROR in batch {batch_num}: {len(batch_errors)} action(s) failed to archive:"
+            )
             for actid, error in batch_errors:
                 print(f"  Action {actid.id} ({actid.name}): {error}")
             all_errors.extend(batch_errors)
 
-        if conf.batch_size > 0 and conf.delete and batch_actions_to_delete and not batch_errors:
+        if (
+            conf.batch_size > 0
+            and conf.delete
+            and batch_actions_to_delete
+            and not batch_errors
+        ):
             if not conf.quiet:
-                print(f"\nBatch {batch_num} complete. Deleting {len(batch_actions_to_delete)} action(s) from server...")
+                print(
+                    f"\nBatch {batch_num} complete. Deleting {len(batch_actions_to_delete)} action(s) from server..."
+                )
 
             for actid in batch_actions_to_delete:
                 err = _delete_action(actid, big_fix, conf)
@@ -539,19 +583,25 @@ def main():
                 print(f"  Action {actid.id} ({actid.name}): {error}")
         if conf.batch_size == 0:
             print(f"\nArchiving incomplete due to errors. No actions will be deleted.")
-            print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
+            print_performance_summary(
+                start_time, start_datetime, total_actions, conf.quiet
+            )
             sys.exit(1)
 
     writer.close()
 
     if conf.batch_size == 0 and conf.delete and all_actions_to_delete:
         if not conf.quiet:
-            print(f"\nArchive complete. Deleting {len(all_actions_to_delete)} action(s) from server...")
+            print(
+                f"\nArchive complete. Deleting {len(all_actions_to_delete)} action(s) from server..."
+            )
 
         for actid in all_actions_to_delete:
             err = _delete_action(actid, big_fix, conf)
             if err:
-                print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
+                print_performance_summary(
+                    start_time, start_datetime, total_actions, conf.quiet
+                )
                 sys.exit(1)
 
     if not conf.quiet:

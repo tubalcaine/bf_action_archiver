@@ -20,6 +20,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class BigfixRESTError(Exception):
     """Base exception for BigFix REST API errors"""
+
     def __init__(self, message, url=None, status_code=None, reason=None):
         self.message = message
         self.url = url
@@ -40,16 +41,19 @@ class BigfixRESTError(Exception):
 
 class BigfixConnectionError(BigfixRESTError):
     """Raised when connection to BigFix server fails"""
+
     pass
 
 
 class BigfixAuthenticationError(BigfixRESTError):
     """Raised when authentication fails"""
+
     pass
 
 
 class BigfixAPIError(BigfixRESTError):
     """Raised when API call returns an error"""
+
     pass
 
 
@@ -112,24 +116,24 @@ class BigfixRESTConnection:
                         "Authentication failed - invalid username or password",
                         url=self.url + "/api/login",
                         status_code=resp.status_code,
-                        reason=resp.reason
+                        reason=resp.reason,
                     )
                 else:
                     raise BigfixConnectionError(
                         "Failed to connect to BigFix server",
                         url=self.url + "/api/login",
                         status_code=resp.status_code,
-                        reason=resp.reason
+                        reason=resp.reason,
                     )
         except requests.exceptions.RequestException as e:
             raise BigfixConnectionError(
                 f"Network error connecting to BigFix server: {str(e)}",
-                url=self.url + "/api/login"
+                url=self.url + "/api/login",
             )
 
     def _get_session(self):
         """Get or create a requests.Session for the current thread"""
-        if not hasattr(self._thread_local, 'session'):
+        if not hasattr(self._thread_local, "session"):
             # Create a new session for this thread
             self._thread_local.session = requests.Session()
             self._thread_local.session.auth = (self.bfuser, self.bfpass)
@@ -162,12 +166,12 @@ class BigfixRESTConnection:
                     "Session relevance query failed",
                     url=self.url + "/api/query",
                     status_code=result.status_code,
-                    reason=result.reason
+                    reason=result.reason,
                 )
         except requests.exceptions.RequestException as e:
             raise BigfixAPIError(
                 f"Network error during relevance query: {str(e)}",
-                url=self.url + "/api/query"
+                url=self.url + "/api/query",
             )
 
     ## Rawest possible GET
@@ -185,14 +189,13 @@ class BigfixRESTConnection:
                     "API GET request failed",
                     url=self.url + url,
                     status_code=res.status_code,
-                    reason=res.reason
+                    reason=res.reason,
                 )
 
             return res.text
         except requests.exceptions.RequestException as e:
             raise BigfixAPIError(
-                f"Network error during GET request: {str(e)}",
-                url=self.url + url
+                f"Network error during GET request: {str(e)}", url=self.url + url
             )
 
     ## Rawest possible DELETE
@@ -212,12 +215,11 @@ class BigfixRESTConnection:
                     "API DELETE request failed",
                     url=self.url + url,
                     status_code=res.status_code,
-                    reason=res.reason
+                    reason=res.reason,
                 )
         except requests.exceptions.RequestException as e:
             raise BigfixAPIError(
-                f"Network error during DELETE request: {str(e)}",
-                url=self.url + url
+                f"Network error during DELETE request: {str(e)}", url=self.url + url
             )
 
     # The idea of this stub method is that we can parse up the return tuple, mangling the
@@ -286,5 +288,5 @@ class BigfixRESTConnection:
                 "Failed to take sourced fixlet action",
                 url=self.url + "/api/actions",
                 status_code=result.status_code,
-                reason=result.reason
+                reason=result.reason,
             )
