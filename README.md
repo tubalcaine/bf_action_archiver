@@ -57,7 +57,7 @@ usage: actionarchive [-h] [-b BFSERVER] [-p BFPORT] -u BFUSER [-P BFPASS]
                      [-o OLDER] [-f FOLDER] [-d] [-v] [-q] [-w WHOSE]
                      [-k KEYCREDS] [-s SETCREDS] [-V]
 
-BigFix Action Archiver v1.1.0
+BigFix Action Archiver v1.2.0
 
 optional arguments:
   -h, --help            Show this help message and exit
@@ -269,7 +269,7 @@ python src/actionarchive.py -b myserver.com -u admin -P password -f ./archive -B
 
 **Example output:**
 ```
-BigFix Action Archiver v1.1.0
+BigFix Action Archiver v1.2.0
 Found 250 action(s) to archive.
 Using 5 worker threads for parallel processing.
 Processing 250 actions in 3 batch(es) of 100.
@@ -295,8 +295,8 @@ Complete: 250 action(s) archived and deleted.
 **Schedule with cron (quiet mode for log files):**
 ```bash
 # Run daily at 2 AM, log only errors
-0 2 * * * /usr/bin/python3 /path/to/src/actionarchive.py \
-  -b bigfix.example.com -u archiver -k production \
+0 2 * * * /home/USER/.local/bin/uv run --project /path/to/bf_action_archiver \
+  python src/actionarchive.py -b bigfix.example.com -u archiver -k production \
   -f /backups/bigfix-actions-$(date +\%Y\%m\%d).tar.gz -d -q >> /var/log/bigfix-archive.log 2>&1
 ```
 
@@ -309,7 +309,7 @@ The tool provides three levels of output verbosity:
 Reports progress for each action being processed, with periodic progress summaries:
 
 ```
-BigFix Action Archiver v1.1.0
+BigFix Action Archiver v1.2.0
 Found 45 action(s) to archive.
 Archiving action 123: Install Security Patch (by admin)
 Archiving action 124: Update Software (by jsmith)
@@ -339,7 +339,7 @@ Complete: 45 action(s) archived and deleted.
 Suppresses all progress messages, only shows errors:
 
 ```
-BigFix Action Archiver v1.1.0
+BigFix Action Archiver v1.2.0
 [Only errors would appear here]
 ```
 
@@ -353,7 +353,7 @@ Ideal for:
 Shows detailed information including API URLs and operations:
 
 ```
-BigFix Action Archiver v1.1.0
+BigFix Action Archiver v1.2.0
 Creating ZIP archive: archive.zip
 Found 5 action(s) to archive.
 Archiving action 123: Install Security Patch (by admin)
@@ -407,20 +407,31 @@ All errors include:
 
 ### Requirements
 
-- Python 3.x
-- Required packages: `argparse`, `keyring`, `requests`
+- Python 3.9 or newer
+- `uv` package manager
 
-### Install Dependencies
+### Install uv
 
-Using pipenv:
 ```bash
-pipenv install
+# Linux/macOS
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or via pipx (available via apt on Ubuntu 23.04+)
+pipx install uv
+
+# Or on macOS with Homebrew
+brew install uv
 ```
 
-Or using pip:
+### Set Up the Project
+
 ```bash
-pip install argparse keyring requests
+# Clone the repository, then:
+uv sync            # installs runtime deps into .venv/
+uv sync --group dev  # installs runtime + dev/lint/test/build deps
 ```
+
+No manual `venv` creation or activation needed. `uv run` automatically uses the project's `.venv/`.
 
 ## Notes
 
