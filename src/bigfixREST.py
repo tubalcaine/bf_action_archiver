@@ -135,24 +135,12 @@ class BigfixRESTConnection:
             self._thread_local.session.auth = (self.bfuser, self.bfpass)
         return self._thread_local.session
 
-    def _check_initialized(self):
-        """Check if connection is initialized before making API calls"""
-        if not self.initialized:
-            raise BigfixConnectionError(
-                "BigFix connection not initialized - authentication may have failed"
-            )
-
     def _is_success(self, http_return_value):
-        rv_diff = http_return_value - 200
-        if rv_diff >= 0 and rv_diff < 100:
-            return True
-
-        return False
+        return 200 <= http_return_value < 300
 
     def relevance_query_json(self, srquery):
         """Takes a session relevance query and returns a JSON dict
         Raises BigfixAPIError on failure"""
-        self._check_initialized()
 
         qheader = {"Content-Type": "application/x-www-form-urlencoded"}
         qquery = {"relevance": srquery, "output": "json"}
@@ -186,7 +174,6 @@ class BigfixRESTConnection:
     def api_get(self, url):
         """Does an http GET on a URL and returns the decoded result
         Raises BigfixAPIError on failure"""
-        self._check_initialized()
 
         try:
             sess = self._get_session()
@@ -212,7 +199,6 @@ class BigfixRESTConnection:
     def api_delete(self, url):
         """Calls an http DELETE on a URL and returns the decoded content
         Raises BigfixAPIError on failure"""
-        self._check_initialized()
 
         try:
             sess = self._get_session()
@@ -294,7 +280,11 @@ class BigfixRESTConnection:
         result = sess.send(prepped, verify=False)
 
         if self._is_success(result.status_code):
-            print(result)
             return BigfixActionResult(result.content)
         else:
-            return None
+            raise BigfixAPIError(
+                "Failed to take sourced fixlet action",
+                url=self.url + "/api/actions",
+                status_code=result.status_code,
+                reason=result.reason
+            )
