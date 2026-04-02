@@ -1,0 +1,30 @@
+[project]
+name = "bf-action-archiver"
+version = "1.2.0"
+description = "BigFix action archiving and auditing tool"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "keyring>=25.0.0",
+    "requests>=2.31.0",
+]
+
+[dependency-groups]
+dev = [
+    "pylint>=3.0",
+    "black>=24.0",
+    "pytest>=8.0",
+    "pyinstaller>=6.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pylint.main]
+source-roots = ["src"]
+
+[tool.black]
+line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

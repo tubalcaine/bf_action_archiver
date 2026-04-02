@@ -1,10 +1,12 @@
 """
-actionarchiver.py - A script that backs up all actions issued more  than --days
-ago that are stopped or expired int a directory structure by issuing operator.
+actionarchiver.py - A script that backs up all actions issued more than --days
+ago that are stopped or expired into a directory structure by issuing operator.
 It can optionally delete the actions also. This can provide useful audit
 information while also cleaning up actions that bog down the console."""
+
 from getpass import getpass
 import argparse
+import io
 import os
 import sys
 import json
@@ -13,6 +15,7 @@ import tarfile
 import threading
 import concurrent.futures
 import time
+from collections import namedtuple
 from datetime import datetime
 
 import keyring
@@ -21,6 +24,11 @@ import bigfixREST
 from bigfixREST import BigfixConnectionError, BigfixAuthenticationError, BigfixAPIError
 
 VERSION = "1.2.0"
+
+ActionRecord = namedtuple(
+    "ActionRecord", ["id", "state", "name", "time_issued", "issuer", "is_mag"]
+)
+MagComponent = namedtuple("MagComponent", ["id", "state", "name"])
 
 
 class ArchiveWriter:
@@ -73,18 +81,15 @@ class ArchiveWriter:
         """Write a file to either directory or archive (thread-safe)"""
         with self.lock:
             if self.archive_type == "zip":
-                # For ZIP archives, add the content as bytes
                 if isinstance(content, str):
                     content = content.encode("utf-8")
                 self.archive_handle.writestr(file_path, content)
             elif self.archive_type in ("tar", "tar.gz"):
-                # For TAR archives, create a TarInfo object
                 if isinstance(content, str):
                     content = content.encode("utf-8")
                 tarinfo = tarfile.TarInfo(name=file_path)
                 tarinfo.size = len(content)
                 tarinfo.mtime = datetime.now().timestamp()
-                import io
                 self.archive_handle.addfile(tarinfo, io.BytesIO(content))
             else:
                 # Directory mode - write actual file
@@ -94,10 +99,8 @@ class ArchiveWriter:
     def get_path(self, *parts):
         """Get a path suitable for this writer (forward slashes for archives)"""
         if self.archive_type == "directory":
-            # For directories, prepend the base path
             return os.path.join(self.path, *parts)
         else:
-            # Archives use forward slashes (no base path needed, handled by archive)
             return "/".join(parts)
 
     def close(self):
@@ -115,11 +118,13 @@ class ArchiveWriter:
         return False
 
 
-def process_action(actid, big_fix, writer, conf, progress_lock, actions_processed, total_actions):
+def process_action(
+    actid, big_fix, writer, conf, progress_lock, actions_processed, total_actions
+):
     """Process a single action in a worker thread
 
     Args:
-        actid: Action tuple from relevance query
+        actid: ActionRecord namedtuple
         big_fix: BigfixRESTConnection instance
         writer: ArchiveWriter instance (thread-safe)
         conf: Configuration namespace
@@ -128,97 +133,115 @@ def process_action(actid, big_fix, writer, conf, progress_lock, actions_processe
         total_actions: Total number of actions to process
 
     Returns:
-        tuple: (success: bool, actid: tuple, error: Exception or None)
+        tuple: (success: bool, actid: ActionRecord, error: Exception or None)
     """
     try:
-        acturl = f"/api/action/{str(actid[0])}"
+        acturl = f"/api/action/{actid.id}"
 
-        # Report action being processed (unless quiet) - with lock
         if not conf.quiet:
             with progress_lock:
-                print(f"Archiving action {actid[0]}: {actid[2]} (by {actid[4]})")
+                print(f"Archiving action {actid.id}: {actid.name} (by {actid.issuer})")
 
-        # Verbose mode shows the API URL details
         if conf.verbose:
             with progress_lock:
                 print(f"  Fetching from API: {acturl}")
 
-        # Fetch action data from BigFix
         action = str(big_fix.api_get(acturl))
         action_status = str(big_fix.api_get(acturl + "/status"))
 
-        # Create action directory
-        actpath = writer.get_path(actid[4])
+        actpath = writer.get_path(actid.issuer)
         writer.makedirs(actpath, exist_ok=True)
 
-        # Write action files (writer is thread-safe)
         writer.write_file(
-            writer.get_path(actid[4], f"{str(actid[0])}_action.xml"),
-            action
+            writer.get_path(actid.issuer, f"{actid.id}_action.xml"), action
         )
         writer.write_file(
-            writer.get_path(actid[4], f"{str(actid[0])}_result.xml"),
-            action_status
+            writer.get_path(actid.issuer, f"{actid.id}_result.xml"), action_status
         )
         writer.write_file(
-            writer.get_path(actid[4], f"{str(actid[0])}_META.txt"),
-            json.dumps(actid, sort_keys=True, indent=4)
+            writer.get_path(actid.issuer, f"{actid.id}_META.txt"),
+            json.dumps(actid._asdict(), sort_keys=True, indent=4),
         )
 
-        # If we are a multiple action group, handle MAG sub-actions
-        if actid[5]:
+        if actid.is_mag:
             mag_query = f"""
             (id of it, state of it, name of it) of member actions of bes action
-              whose (id of it = {actid[0]})
+              whose (id of it = {actid.id})
             """
-            mag_components = big_fix.relevance_query_json(mag_query)
+            mag_result = big_fix.relevance_query_json(mag_query)
+            mag_components = [MagComponent(*row) for row in mag_result["result"]]
 
-            mag_path = writer.get_path(actid[4], f"{actid[0]}_MAG")
+            mag_path = writer.get_path(actid.issuer, f"{actid.id}_MAG")
             writer.makedirs(mag_path, exist_ok=True)
 
-            for mag_id in mag_components["result"]:
-                magurl = f"/api/action/{str(mag_id[0])}"
+            for mag in mag_components:
+                magurl = f"/api/action/{mag.id}"
 
-                # Report MAG sub-action (unless quiet) - with lock
                 if not conf.quiet:
                     with progress_lock:
-                        print(f"  - MAG sub-action {mag_id[0]}: {mag_id[2]}")
+                        print(f"  - MAG sub-action {mag.id}: {mag.name}")
 
-                # Verbose mode shows the API URL details
                 if conf.verbose:
                     with progress_lock:
                         print(f"    Fetching from API: {magurl}")
 
-                # Fetch MAG sub-action data
                 mag_action = str(big_fix.api_get(magurl))
                 mag_action_status = str(big_fix.api_get(magurl + "/status"))
 
-                # Write MAG action files (writer is thread-safe)
                 writer.write_file(
-                    writer.get_path(actid[4], f"{actid[0]}_MAG", f"{str(mag_id[0])}_action.xml"),
-                    mag_action
+                    writer.get_path(
+                        actid.issuer, f"{actid.id}_MAG", f"{mag.id}_action.xml"
+                    ),
+                    mag_action,
                 )
                 writer.write_file(
-                    writer.get_path(actid[4], f"{actid[0]}_MAG", f"{str(mag_id[0])}_result.xml"),
-                    mag_action_status
+                    writer.get_path(
+                        actid.issuer, f"{actid.id}_MAG", f"{mag.id}_result.xml"
+                    ),
+                    mag_action_status,
                 )
 
-        # Increment counter and report progress if needed - with lock
         with progress_lock:
             actions_processed[0] += 1
-            if (not conf.quiet and
-                conf.progress > 0 and
-                actions_processed[0] % conf.progress == 0 and
-                actions_processed[0] < total_actions):
+            if (
+                not conf.quiet
+                and conf.progress > 0
+                and actions_processed[0] % conf.progress == 0
+                and actions_processed[0] < total_actions
+            ):
                 remaining = total_actions - actions_processed[0]
                 percentage = (actions_processed[0] / total_actions) * 100
-                print(f"Progress: {actions_processed[0]}/{total_actions} actions archived ({percentage:.1f}% complete, {remaining} remaining)")
+                print(
+                    f"Progress: {actions_processed[0]}/{total_actions} actions archived ({percentage:.1f}% complete, {remaining} remaining)"
+                )
 
         return (True, actid, None)
 
     except Exception as e:
-        # Return error, will be handled by main thread
         return (False, actid, e)
+
+
+def _delete_action(actid, big_fix, conf):
+    """Delete a single action from the server.
+
+    Returns the exception on error, None on success.
+    """
+    durl = f"/api/action/{actid.id}"
+    if conf.verbose:
+        print(f"  Running REST API: DELETE {durl}")
+    try:
+        delres = big_fix.api_delete(durl)
+        if delres != b"ok":
+            print(
+                f"WARNING: [DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
+            )
+        elif not conf.quiet:
+            print(f"  Deleted action {actid.id}: {actid.name}")
+        return None
+    except BigfixAPIError as e:
+        print(f"ERROR deleting action {actid.id}: {e}")
+        print("Archive is complete but some actions may not have been deleted.")
+        return e
 
 
 def format_elapsed_time(seconds):
@@ -244,7 +267,6 @@ def print_performance_summary(start_time, start_datetime, total_actions, quiet=F
     end_datetime = datetime.now()
     elapsed_seconds = end_time - start_time
 
-    # Calculate actions per minute
     if elapsed_seconds > 0:
         actions_per_minute = (total_actions / elapsed_seconds) * 60
     else:
@@ -262,14 +284,9 @@ def print_performance_summary(start_time, start_datetime, total_actions, quiet=F
 
 def main():
     """main routine"""
-    ## MAIN code begins:
     print(f"BigFix Action Archiver v{VERSION}")
 
-    # Handle version display early (before argument validation)
     if "--version" in sys.argv or "-V" in sys.argv:
-        print(f"BigFix Action Archiver")
-        print(f"Version: {VERSION}")
-        print(f"Python REST API tool for archiving BigFix actions")
         sys.exit(0)
 
     parser = argparse.ArgumentParser()
@@ -308,10 +325,16 @@ def main():
         "-d", "--delete", action="store_true", help="Delete archived actions"
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Verbose output (show extra details)"
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Verbose output (show extra details)",
     )
     parser.add_argument(
-        "-q", "--quiet", action="store_true", help="Quiet mode (suppress progress messages)"
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Quiet mode (suppress progress messages)",
     )
     parser.add_argument(
         "-n",
@@ -358,34 +381,37 @@ def main():
     )
     conf = parser.parse_args()
 
-    # Validate progress argument
     if conf.progress < 0:
         print("ERROR: Progress interval must be 0 or greater")
         sys.exit(1)
 
-    # Validate threads argument
     if conf.threads < 1:
         print("ERROR: Number of threads must be 1 or greater")
         sys.exit(1)
     if conf.threads > 10:
-        print(f"WARNING: Using {conf.threads} threads may overload the BigFix server. Recommended maximum is 10.")
+        print(
+            f"WARNING: Using {conf.threads} threads may overload the BigFix server. Recommended maximum is 10."
+        )
 
-    # Validate batch-size argument
     if conf.batch_size < 0:
         print("ERROR: Batch size must be 0 or greater")
         sys.exit(1)
     if conf.batch_size > 0:
-        # Check if output is a directory (not an archive)
         lower_folder = conf.folder.lower()
-        if (lower_folder.endswith(".zip") or
-            lower_folder.endswith(".tar") or
-            lower_folder.endswith(".tar.gz") or
-            lower_folder.endswith(".tgz")):
-            print("ERROR: Batch processing is only supported with directory output (not ZIP/TAR archives)")
-            print("Remove the -B/--batch-size flag or change output to a directory path")
+        if (
+            lower_folder.endswith(".zip")
+            or lower_folder.endswith(".tar")
+            or lower_folder.endswith(".tar.gz")
+            or lower_folder.endswith(".tgz")
+        ):
+            print(
+                "ERROR: Batch processing is only supported with directory output (not ZIP/TAR archives)"
+            )
+            print(
+                "Remove the -B/--batch-size flag or change output to a directory path"
+            )
             sys.exit(1)
 
-    # setcreds is a "single" operation, do it and terminate.
     if conf.setcreds is not None:
         set_secure_credentials(conf.setcreds, conf.bfuser)
         sys.exit(0)
@@ -395,7 +421,6 @@ def main():
     else:
         bfpass = conf.bfpass
 
-    # If password is still not set, prompt for it with double-entry verification
     if bfpass is None:
         onepass = "not"  # Set to ensure mismatch and avoid fail msg 1st time
         twopass = ""
@@ -412,11 +437,8 @@ def main():
 
         bfpass = onepass
 
-    # Create the archive writer (handles both directories and archive files)
-    # Show writer creation only in verbose mode
     writer = ArchiveWriter(conf.folder, verbose=conf.verbose)
 
-    # Connect to BigFix server
     try:
         big_fix = bigfixREST.BigfixRESTConnection(
             conf.bfserver, conf.bfport, conf.bfuser, bfpass
@@ -438,7 +460,6 @@ def main():
     top level flag of it and
     (state of it = "Expired" or state of it = "Stopped"))""".strip()
 
-    # Query for actions to archive
     try:
         ares = big_fix.relevance_query_json(actquery)
     except BigfixAPIError as e:
@@ -447,67 +468,60 @@ def main():
             print(f"Query was: {actquery}")
         sys.exit(1)
 
-    # Report query results (unless quiet)
-    if not conf.quiet:
-        print(f"Found {len(ares['result'])} action(s) to archive.")
+    actions = [ActionRecord(*row) for row in ares["result"]]
+    total_actions = len(actions)
 
-    # Record start time for performance metrics
+    if not conf.quiet:
+        print(f"Found {total_actions} action(s) to archive.")
+
     start_time = time.time()
     start_datetime = datetime.now()
 
-    # Write action data
     writer.write_file(
-        writer.get_path("action_data.json"),
-        json.dumps(ares, sort_keys=True, indent=4)
+        writer.get_path("action_data.json"), json.dumps(ares, sort_keys=True, indent=4)
     )
 
-    # Write execution config data
-    v_conf = vars(conf)
+    v_conf = dict(vars(conf))
     v_conf["bfpass"] = "Removed_for_Security"
     writer.write_file(
         writer.get_path("execution_config_data.json"),
-        json.dumps(v_conf, sort_keys=True, indent=4)
+        json.dumps(v_conf, sort_keys=True, indent=4),
     )
 
-    # Phase 1: Archive all actions (collect IDs for deletion if needed)
-    total_actions = len(ares["result"])
-
-    # Create shared resources for threading
     progress_lock = threading.Lock()
     actions_processed = [0]  # Use list for mutability across threads
-    all_actions_to_delete = []  # Collect all actions for final deletion (no batching)
+    all_actions_to_delete = []
     all_errors = []
 
-    # Report threading mode (unless quiet)
     if not conf.quiet and conf.threads > 1:
         print(f"Using {conf.threads} worker threads for parallel processing.")
 
-    # Report batching mode (unless quiet)
     if not conf.quiet and conf.batch_size > 0:
         num_batches = (total_actions + conf.batch_size - 1) // conf.batch_size
-        print(f"Processing {total_actions} actions in {num_batches} batch(es) of {conf.batch_size}.")
+        print(
+            f"Processing {total_actions} actions in {num_batches} batch(es) of {conf.batch_size}."
+        )
 
-    # Determine batches
     if conf.batch_size > 0:
-        # Split actions into batches
-        batches = [ares["result"][i:i+conf.batch_size]
-                   for i in range(0, len(ares["result"]), conf.batch_size)]
+        batches = [
+            actions[i : i + conf.batch_size]
+            for i in range(0, len(actions), conf.batch_size)
+        ]
     else:
-        # No batching - process all at once
-        batches = [ares["result"]]
+        batches = [actions]
 
-    # Process each batch
     for batch_num, batch in enumerate(batches, 1):
         batch_actions_to_delete = []
         batch_errors = []
 
-        # Report batch start (if batching enabled and not quiet)
         if not conf.quiet and conf.batch_size > 0:
-            print(f"\nBatch {batch_num}/{len(batches)}: Processing {len(batch)} action(s)...")
+            print(
+                f"\nBatch {batch_num}/{len(batches)}: Processing {len(batch)} action(s)..."
+            )
 
-        # Use ThreadPoolExecutor for parallel processing
-        with concurrent.futures.ThreadPoolExecutor(max_workers=conf.threads) as executor:
-            # Submit all actions in this batch to the executor
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=conf.threads
+        ) as executor:
             futures = {
                 executor.submit(
                     process_action,
@@ -517,123 +531,92 @@ def main():
                     conf,
                     progress_lock,
                     actions_processed,
-                    total_actions
+                    total_actions,
                 ): actid
                 for actid in batch
             }
 
-            # Collect results as they complete
             for future in concurrent.futures.as_completed(futures):
                 actid = futures[future]
                 try:
                     success, returned_actid, error = future.result()
 
                     if not success:
-                        # Collect error for reporting
                         batch_errors.append((returned_actid, error))
                     elif conf.delete:
-                        # Collect action for deletion (thread-safe)
                         with progress_lock:
                             batch_actions_to_delete.append(returned_actid)
 
                 except Exception as e:
-                    # Unexpected exception from the future itself
                     batch_errors.append((actid, e))
 
-        # Report batch errors
         if batch_errors:
-            print(f"\nERROR in batch {batch_num}: {len(batch_errors)} action(s) failed to archive:")
+            print(
+                f"\nERROR in batch {batch_num}: {len(batch_errors)} action(s) failed to archive:"
+            )
             for actid, error in batch_errors:
-                print(f"  Action {actid[0]} ({actid[2]}): {error}")
+                print(f"  Action {actid.id} ({actid.name}): {error}")
             all_errors.extend(batch_errors)
-            # Continue to next batch even if this one had errors
 
-        # If batching with delete: delete this batch now (Phase 2 per batch)
-        if conf.batch_size > 0 and conf.delete and batch_actions_to_delete and not batch_errors:
+        if (
+            conf.batch_size > 0
+            and conf.delete
+            and batch_actions_to_delete
+            and not batch_errors
+        ):
             if not conf.quiet:
-                print(f"\nBatch {batch_num} complete. Deleting {len(batch_actions_to_delete)} action(s) from server...")
+                print(
+                    f"\nBatch {batch_num} complete. Deleting {len(batch_actions_to_delete)} action(s) from server..."
+                )
 
             for actid in batch_actions_to_delete:
-                durl = f"/api/action/{str(actid[0])}"
-
-                # Verbose mode shows the API details
-                if conf.verbose:
-                    print(f"  Running REST API: DELETE {durl}")
-
-                try:
-                    delres = big_fix.api_delete(durl)
-                    if delres != b"ok":
-                        print(
-                            f"WARNING: [DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
-                        )
-                    elif not conf.quiet:
-                        print(f"  Deleted action {actid[0]}: {actid[2]}")
-                except BigfixAPIError as e:
-                    print(f"ERROR deleting action {actid[0]}: {e}")
-                    print(f"Archive is complete but some actions may not have been deleted.")
-                    all_errors.append((actid, e))
+                err = _delete_action(actid, big_fix, conf)
+                if err:
+                    all_errors.append((actid, err))
         else:
-            # No batching or no delete: collect for later
             all_actions_to_delete.extend(batch_actions_to_delete)
 
-    # Report any errors that occurred across all batches
     if all_errors:
         print(f"\nERROR: {len(all_errors)} total action(s) failed during processing:")
         if not conf.quiet:
             for actid, error in all_errors:
-                print(f"  Action {actid[0]} ({actid[2]}): {error}")
-        if conf.batch_size == 0:  # Only exit if not batching (batching continues on errors)
+                print(f"  Action {actid.id} ({actid.name}): {error}")
+        if conf.batch_size == 0:
             print(f"\nArchiving incomplete due to errors. No actions will be deleted.")
-            print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
+            print_performance_summary(
+                start_time, start_datetime, total_actions, conf.quiet
+            )
             sys.exit(1)
 
-    # Close the writer to finalize any archive
-    # This ensures all files are written to disk before any deletions occur
     writer.close()
 
-    # Phase 2: Delete actions from server (only if no batching was used)
     if conf.batch_size == 0 and conf.delete and all_actions_to_delete:
         if not conf.quiet:
-            print(f"\nArchive complete. Deleting {len(all_actions_to_delete)} action(s) from server...")
+            print(
+                f"\nArchive complete. Deleting {len(all_actions_to_delete)} action(s) from server..."
+            )
 
         for actid in all_actions_to_delete:
-            durl = f"/api/action/{str(actid[0])}"
-
-            # Verbose mode shows the API details
-            if conf.verbose:
-                print(f"  Running REST API: DELETE {durl}")
-
-            try:
-                delres = big_fix.api_delete(durl)
-                if delres != b"ok":
-                    print(
-                        f"WARNING: [DELETE https://{conf.bfserver}:{conf.bfport}{durl}] returned {delres}."
-                    )
-                elif not conf.quiet:
-                    print(f"  Deleted action {actid[0]}: {actid[2]}")
-            except BigfixAPIError as e:
-                print(f"ERROR deleting action {actid[0]}: {e}")
-                print(f"Archive is complete but some actions may not have been deleted.")
-                print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
+            err = _delete_action(actid, big_fix, conf)
+            if err:
+                print_performance_summary(
+                    start_time, start_datetime, total_actions, conf.quiet
+                )
                 sys.exit(1)
 
-    # Print final summary (unless quiet)
     if not conf.quiet:
         if not conf.delete:
-            print(f"\nComplete: {len(ares['result'])} action(s) archived.")
+            print(f"\nComplete: {total_actions} action(s) archived.")
         else:
-            print(f"\nComplete: {len(ares['result'])} action(s) archived and deleted.")
+            print(f"\nComplete: {total_actions} action(s) archived and deleted.")
 
-    # Print performance summary
     print_performance_summary(start_time, start_datetime, total_actions, conf.quiet)
 
     sys.exit(0)
 
 
 def set_secure_credentials(service_name, user_name):
-    """set_secure_credentials() Use python keyring to store REST API password
-    in a secure manner for later use"""
-    ## We need to prompt for and save encrypted credentials
+    """Use python keyring to store REST API password in a secure manner for later use"""
     onepass = "not"  # Set to ensure mismatch and avoid fail msg 1st time
     twopass = ""
 
@@ -653,10 +636,8 @@ def set_secure_credentials(service_name, user_name):
         onepass = getpass(f"BigFix password for {user_name}: ")
         twopass = getpass("Enter the password again: ")
 
-        keyring.set_password(service_name, user_name, onepass)
-    sys.exit(0)
+    keyring.set_password(service_name, user_name, onepass)
 
 
 if __name__ == "__main__":
-    # stuff only to run when not called via 'import' here
     main()
